@@ -5,12 +5,12 @@ import numpy as np
 # Set page configuration
 st.set_page_config(
     page_title="Hardware Parts Price Comparison",
-    page_icon=":hammer:",
+    page_icon="",
     layout="wide"
 )
 
 # Display a logo and header
-logo_url = "https://via.placeholder.com/150"  # Replace with your actual logo URL
+logo_url = "./logo-png.png"  # Replace with your actual logo URL
 st.image(logo_url, width=150)
 st.title("Hardware Parts Price Comparison")
 st.markdown("### Compare Prices of Hardware Parts on EBay")
@@ -55,7 +55,14 @@ st.sidebar.header("Filters")
 # Filter by BRAND using the "BRAND" column
 if "BRAND" in df.columns:
     brand_options = df["BRAND"].dropna().unique().tolist()
-    selected_brand = st.sidebar.multiselect("Select Brand(s):", options=brand_options, default=brand_options)
+    selected_brand = st.sidebar.multiselect("Select Brand(s):", options=brand_options, default=[])
+else:
+    st.error("Column 'BRAND' not found in CSV!")
+    selected_brand = []
+
+if "PRODUCT NAME" in df.columns:
+    PRODUCT_options = df["PRODUCT NAME"].dropna().unique().tolist()
+    selected_PRODUCT = st.sidebar.multiselect("Select Product(s):", options=PRODUCT_options, default=[])
 else:
     st.error("Column 'BRAND' not found in CSV!")
     selected_brand = []
@@ -77,12 +84,20 @@ selected_price = st.sidebar.slider(
 
 # Apply filters on the data
 filtered_df = df.copy()
-if selected_brand:
-    filtered_df = filtered_df[filtered_df["BRAND"].isin(selected_brand)]
+filtered_df_brand=[]
+
+filtered_df_brand = filtered_df[filtered_df["BRAND"].isin(selected_brand)]
+if len(filtered_df_brand)!=0:
+    filtered_df=filtered_df_brand
+
 filtered_df = filtered_df[
     (filtered_df["Price_EBay_Numeric"] >= selected_price[0]) &
     (filtered_df["Price_EBay_Numeric"] <= selected_price[1])
 ]
+
+filtered_df_product=filtered_df[filtered_df["PRODUCT NAME"].isin(selected_PRODUCT)]
+if len(filtered_df_product)!=0:
+    filtered_df=filtered_df_product
 
 # Select only the desired columns for display
 display_columns = ["BRAND", "PRODUCT NAME", "Shop Name", "Price_EBay"]
