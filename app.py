@@ -19,7 +19,7 @@ st.markdown("### Compare Prices of Hardware Parts on EBay")
 # Load data
 @st.cache_data
 def load_data():
-    df = pd.read_csv("Pricing_Ebay_append.csv")
+    df = pd.read_csv("combined.csv")
     df.columns = df.columns.str.strip()
 
     def parse_price(price):
@@ -34,12 +34,12 @@ def load_data():
         except Exception:
             return np.nan
 
-    df["Price_EBay_Numeric"] = df["Price_EBay"].apply(parse_price)
+    df["Price_Numeric"] = df["Price"].apply(parse_price)
     return df
 
 # Load and pivot data
 df = load_data()
-df_pivot = df.pivot_table(index=["BRAND", "PRODUCT NAME"], columns="Shop Name", values="Price_EBay_Numeric", aggfunc='first').reset_index()
+df_pivot = df.pivot_table(index=["BRAND", "PRODUCT NAME"], columns="Shop Name", values="Price_Numeric", aggfunc='first').reset_index()
 
 # Sidebar filters
 st.sidebar.header("Filters")
