@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Display a logo and header
+# Display logo and header
 st.image(logo_image, width=150)
 st.title("Hardware Parts Price Comparison")
 st.markdown("### Compare Prices of Hardware Parts on EBay")
@@ -26,6 +26,7 @@ def load_data():
         if pd.isna(price):
             return np.nan
         price_str = str(price)
+        # Remove extra characters and text
         for char in ["AU", "$", ",", "each"]:
             price_str = price_str.replace(char, "")
         price_str = price_str.strip()
@@ -39,7 +40,12 @@ def load_data():
 
 # Load and pivot data
 df = load_data()
-df_pivot = df.pivot_table(index=["BRAND", "PRODUCT NAME"], columns="Shop Name", values="Price_Numeric", aggfunc='first').reset_index()
+df_pivot = df.pivot_table(
+    index=["BRAND", "PRODUCT NAME"], 
+    columns="Shop Name", 
+    values="Price_Numeric", 
+    aggfunc='first'
+).reset_index()
 
 # Sidebar filters
 st.sidebar.header("Filters")
@@ -58,11 +64,34 @@ if selected_brand:
 if selected_product:
     filtered_df = filtered_df[filtered_df["PRODUCT NAME"].isin(selected_product)]
 
-# Display filtered data
-st.subheader("Filtered Data")
-st.dataframe(filtered_df)
+# Define a function to highlight the cheapest price in each row (ignoring BRAND and PRODUCT NAME)
+def highlight_min(row):
+    # Identify competitor columns (all columns except BRAND and PRODUCT NAME)
+    competitor_cols = [col for col in row.index if col not in ["BRAND", "PRODUCT NAME"]]
+    # If there are no numeric values, return empty style for all columns
+    if row[competitor_cols].dropna().empty:
+        return [""] * len(row)
+    # Find the minimum price among competitor columns (ignoring NaNs)
+    min_val = row[competitor_cols].min()
+    # Return a style list for the row: highlight the cell if it equals the min value.
+    return [
+        'background-color: lightgreen' if (col in competitor_cols and row[col] == min_val) else ''
+        for col in row.index
+    ]
 
-# Download option
+# Apply styling to the DataFrame: format numeric columns to 2 decimal places and highlight minimums.
+competitor_columns = [col for col in filtered_df.columns if col not in ["BRAND", "PRODUCT NAME"]]
+styled_df = (
+    filtered_df.style
+    .apply(highlight_min, axis=1)
+    .format("{:.2f}", subset=competitor_columns)
+)
+
+# Display filtered data with highlighted cheapest prices
+st.subheader("Filtered Data")
+st.dataframe(styled_df)
+
+# Download option for filtered data
 @st.cache_data
 def convert_df_to_csv(dataframe):
     return dataframe.to_csv(index=False).encode('utf-8')
