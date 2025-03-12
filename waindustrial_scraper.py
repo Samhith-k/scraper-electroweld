@@ -1,34 +1,43 @@
-import httpx
+import numpy as np
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 
-# Create a session with browser-like headers.
-session = httpx.Client(
-    headers={
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.35"
-        ),
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;"
-            "q=0.9,image/avif,image/webp,image/apng,*/*;"
-            "q=0.8,application/signed-exchange;v=b3;q=0.7"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-    },
-    http2=True,
-    follow_redirects=True
-)
+def get_waindustrialsupplies_price(url: str) -> str:
+    # Validate URL
+    if not url or not isinstance(url, str) or url.strip() == "":
+        return np.nan
+    if not url.startswith("https://www.waindustrialsupplies.net/"):
+        return np.nan
 
-# Specify the URL to scrape.
-url = "https://www.waindustrialsupplies.net/product/razor-multi-175-mig-tig-stick-welder/296"
+    # Configure Selenium for headless browsing.
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    
+    # Initialize the webdriver (ensure the driver is in your PATH)
+    driver = webdriver.Chrome(options=chrome_options)
+    try:
+        driver.set_page_load_timeout(15)
+        print("DEBUG: Fetching URL:", url)
+        driver.get(url)
+        # Wait for JavaScript to load the dynamic content.
+        time.sleep(5)  # Adjust as necessary for the content to load
 
-# Get the response.
-response = session.get(url)
-print("DEBUG: Response length =", len(response.text), "characters")
+        # Extract the price using the full XPath.
+        xpath_price = "/html/body/div[1]/div/div[1]/div[1]/div/div/div[2]/div[2]/div/div[1]/div/div/div/div/div/div[2]/div/div/div/div[2]/form/section[1]/div[1]/div/h3/span"
+        price_element = driver.find_element(By.XPATH, xpath_price)
+        price_text = price_element.text.strip()
+        return price_text
+    except Exception as e:
+        print("Exception occurred while fetching price:", e)
+        return np.nan
+    finally:
+        driver.quit()
 
-# Write the received HTML into a file called x.html.
-with open("x.html", "w", encoding="utf-8") as file:
-    file.write(response.text)
-
-print("DEBUG: HTML saved to x.html")
+if __name__ == "__main__":
+    url = "https://www.waindustrialsupplies.net/product/razor-350-swf-mig-tig-stick-welder/291"
+    price = get_waindustrialsupplies_price(url)
+    print("Product Price:", price)
