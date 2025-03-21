@@ -1,48 +1,80 @@
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException
+from webdriver_manager.chrome import ChromeDriverManager
+import numpy as np
+import time
 
-def get_sydney_tools_price(url: str, timeout: int = 20) -> str:
-    """
-    Uses Selenium with headless Chrome to load the Sydney Tools product page,
-    waits for the <div class="price"> element to appear, and collects all text
-    from the <span> elements inside that div. Returns the combined text.
-    """
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
+def get_sydney_tools_price(url, driver):
+    # Validate the URL: if empty or doesn't start with the expected prefix, return np.nan
+    if not url or not isinstance(url, str) or not url.startswith("https://sydneytools.com.au/product"):
+        return np.nan
+    if not url or not isinstance(url, str) or url.strip() == "":
+        return np.nan
+    if not url.startswith("https://sydneytools.com.au/product"):
+        return np.nan
 
-    driver = webdriver.Chrome(options=options)
     try:
+        # Navigate to the product page
         driver.get(url)
-
+        
+        # Wait for the page to load dynamic content
+        time.sleep(3)
+        
+        # Try to extract the price using the exact XPath provided
         try:
-            # Wait until the <div class="price"> is present in the DOM
-            price_div = WebDriverWait(driver, timeout).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div.price"))
+            # The parts of the price
+            price_xpath = (
+                "/html/body/div[1]/div/div/section/section/div[2]/div/div/div[3]/div[2]/div[3]/div/div[2]/span[2]"
             )
-            # Gather all <span> elements inside the price div
-            span_elements = price_div.find_elements(By.CSS_SELECTOR, "span")
+            price_element = driver.find_element(By.XPATH, price_xpath)
             
-            # Combine the text from all spans into a single string
-            price_text = " ".join(span.text.strip() for span in span_elements if span.text.strip())
-            return price_text
+            dollar_xpath = (
+                "/html/body/div[1]/div/div/section/section/div[2]/div/div/div[3]/div[2]/div[3]/div/div[2]/span[1]"
+            )
+            dollar_element = driver.find_element(By.XPATH, dollar_xpath)
+            
+            decimal_xpath = (
+                "/html/body/div[1]/div/div/section/section/div[2]/div/div/div[3]/div[2]/div[3]/div/div[2]/span[3]"
+            )
+            decimal_element = driver.find_element(By.XPATH, decimal_xpath)
+            
+            cents_xpath = (
+                "/html/body/div[1]/div/div/section/section/div[2]/div/div/div[3]/div[2]/div[3]/div/div[2]/span[4]"
+            )
+            cents_element = driver.find_element(By.XPATH, cents_xpath)
+            
+            # Combine the parts
+            price = dollar_element.text + price_element.text + decimal_element.text + cents_element.text
+            return price.strip()
+            
+        except NoSuchElementException:
+            # If the specific XPath fails, try a fallback using a CSS selector
+            try:
+                price_container = driver.find_element(By.CSS_SELECTOR, "div.price")
+                return price_container.text.strip()
+            except NoSuchElementException:
+                return np.nan
+    
+    except Exception as e:
+        #print(f"Error extracting price: {e}")
+        return np.nan
 
-        except TimeoutException:
-            print(f"Timeout: No <div class='price'> found within {timeout} seconds.")
-            # For debugging: print the page source to see what actually loaded
-            print(driver.page_source)
-            return ""
-    finally:
-        driver.quit()
-
+# Example usage
 if __name__ == "__main__":
-    url = (
-        "https://sydneytools.com.au/product/"
-        "unimig-u11008k-240v-razor-3in1-multi-220-mitigstick-welder"
-    )
-    price = get_sydney_tools_price(url)
-    print("Price found:", price)
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    # Initialize the driver using webdriver_manager
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+    
+    # Provide a valid Sydney Tools product URL here
+    url = "https://sydneytools.com.au/product/unimig-u12002k-240v-90kva-razor-tig-200-acdc-welder"  # Replace with an actual product URL
+    price = get_sydney_tools_price(url, driver)
+    print(f"Price: {price}")
+    
+    driver.quit()

@@ -1,45 +1,41 @@
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 import time
+import logging
+import numpy as np
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 
-def print_machineryhouse_spans_undetected(url: str) -> None:
-    """
-    Uses undetected-chromedriver to bypass bot detection and fetch the Machinery House page.
-    Prints debug information and then all text from <span> elements.
-    """
-    # Set up Chrome options.
-    options = uc.ChromeOptions()
-    options.headless = True  # Use headless mode
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    
-    # Specify version_main to match your installed Chrome version (133 in your case)
-    driver = uc.Chrome(version_main=133, options=options)
-    
+# Set up debug logging
+
+def get_hares_and_forbes_price(url, driver):
     try:
-        print(f"Opening URL: {url}")
+        # Check if the URL is valid and starts with the expected domain.
+        if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
+            return np.nan
+        if not url.startswith("https://www.machineryhouse.com.au"):
+            return np.nan
+
+        xpath_price = "/html/body/div[1]/div[3]/main/section/div/div[4]/div[2]/div[1]/div[3]/div/div[2]/span"
         driver.get(url)
+        time.sleep(10)  # Adjust as necessary based on your connection and the site's response
         
-        # Wait until the page title no longer contains "Just a moment".
-        WebDriverWait(driver, 30).until(lambda d: "Just a moment" not in d.title)
-        time.sleep(5)  # Additional wait to ensure content is loaded
-        
-        print("Page title:", driver.title)
-        page_source = driver.page_source
-        print("Length of page source:", len(page_source))
-        
-        spans = driver.find_elements(By.TAG_NAME, "span")
-        print("Total number of <span> elements found:", len(spans))
-        
-        for idx, span in enumerate(spans, start=1):
-            text = span.text.strip()
-            if text:
-                print(f"Span {idx}: {text}")
+        price_element = driver.find_element(By.XPATH, xpath_price)
+        return price_element.text
     except Exception as e:
-        print("Error occurred:", e)
-    finally:
-        driver.quit()
+        # Log the error if needed (print or use logging)
+        print(f"Error retrieving price from {url}: {e}")
+        return np.nan
 
 if __name__ == "__main__":
-    url = "https://www.machineryhouse.com.au/w243"
-    print_machineryhouse_spans_undetected(url)
+    chrome_options = Options()
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-infobars")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    driver = webdriver.Chrome(options=chrome_options)
+    url = "https://www.machineryhouse.com.au/w2442"
+    price = get_hares_and_forbes_price(url,driver)
+    print(price)
+    driver.quit()
