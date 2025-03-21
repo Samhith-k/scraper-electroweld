@@ -46,11 +46,12 @@ def get_alphaweld_price(url: str) -> str:
 
     # Parse the response text with Selector
     sel = Selector(response.text)
-    special_price_text = sel.css("div.price.special div.value::text").get()
-    if not price_text:
-        price_text = sel.css("div.price div.value::text").get()
+    price_text = sel.css("div.price div.value::text").get()
     if not price_text:
         return np.nan
+    special_price_text = sel.css("div.price.special div.value::text").get()
+    if special_price_text:
+        price_text = special_price_text
     clean_price = price_text.replace("$", "").replace("excl GST", "").strip()
     return clean_price
 
