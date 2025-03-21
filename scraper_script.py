@@ -328,6 +328,45 @@ def get_supercheapauto_price(url: str) -> str:
     price = price_class if price_class else price_full
     return price[1:].strip() if price.startswith("$") else (price if price else np.nan)
 
+def get_primesupplies_price(url: str) -> str:
+    if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
+        return np.nan
+    if not url.startswith("https://www.primesupplies.com.au/product/"):
+        return np.nan
+        
+    try:
+        with httpx.Client(
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            },
+            follow_redirects=True,
+            timeout=15.0,
+        ) as session:
+            response = session.get(url)
+    except (httpx.ReadTimeout, Exception) as e:
+        print(f"Error fetching Prime Supplies URL {url}: {e}")
+        return np.nan
+        
+    sel = Selector(response.text)
+    
+    price = sel.xpath("/html/body/div[2]/main/div[2]/div[2]/div[1]/p[2]/span/bdi/text()").get(default="").strip()
+    
+    if not price:
+        price = sel.css("p.price span.woocommerce-Price-amount.amount bdi::text").get(default="").strip()
+    
+    if not price:
+        price = sel.css(".price .woocommerce-Price-amount.amount::text").get(default="").strip()
+    
+    if price:
+        # Remove currency symbol if present
+        price = price.replace("$", "").strip()
+        # Remove "inc. GST" text if present
+        price = price.replace("inc. GST", "").strip()
+        return price
+    else:
+        return np.nan
+
 class CompanyScraper:
     def __init__(self, name, pattern):
         self.name = name
@@ -480,6 +519,13 @@ class NationalWeldingScraper(CompanyScraper):
         super().__init__("NATIONAL WELDING", "national welding")
     def get_price(self, url: str) -> str:
         return get_national_welding_price(url)
+    
+class PrimeSuppliesScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("PRIME SUPPLIES", "PRIME SUPPLIES")
+    
+    def get_price(self, url: str) -> str:
+        return get_primesupplies_price(url)
 
 def read_and_prepare_df():
     df = pd.read_excel('Pricing.xlsx', sheet_name="Sheet2")
@@ -561,7 +607,8 @@ def main():
         HareAndForbesScraper(),
         AlphaweldScraper(),
         HampdonScraper(),
-        NationalWeldingScraper()
+        NationalWeldingScraper(),
+        PrimeSuppliesScraper()
     ]
     while True:
         print("\nMENU")
