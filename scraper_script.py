@@ -12,6 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 import concurrent.futures
+from hare_and_forbes_scraper import get_hares_and_forbes_price
 
 from tools_warehouse_scraper import get_toolswarehouse_price
 from kennedys_scraper import get_kennedys_price
@@ -19,6 +20,7 @@ from vektools_scraper import get_vektools_price
 from sydney_tools_scraper import get_sydney_tools_price
 from total_tools_scraper import get_total_tools_price
 from alphaweld import get_alphaweld_price
+from waindustrial_scraper import get_waindustrialsupplies_price
 
 def init_driver() -> webdriver.Chrome:
     chrome_options = Options()
@@ -42,6 +44,7 @@ def fetch_value_by_xpath(driver: webdriver.Chrome, url: str, xpath: str) -> str:
         value = element.text.strip()
         return value.replace("A$", "")
     except Exception as e:
+        print("Exception:", e)
         print("Exception occurred while fetching value for URL:", url)
         return np.nan
 
@@ -102,21 +105,6 @@ def get_bilba_website_price(url: str) -> str:
     sel = Selector(response.text)
     price = sel.css("span.price-item.price-item-regular::text").get(default="").strip()
     return price[1:] if price.startswith("$") else price
-
-def get_hares_and_forbes_price(url, driver):
-    try:
-        if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
-            return np.nan
-        if not url.startswith("https://www.machineryhouse.com.au"):
-            return np.nan
-        xpath_price = "/html/body/div[1]/div[3]/main/section/div/div[4]/div[2]/div[1]/div[3]/div/div[2]/span"
-        driver.get(url)
-        time.sleep(5)
-        price_element = driver.find_element(By.XPATH, xpath_price)
-        return price_element.text
-    except Exception as e:
-        print(f"Error retrieving price from {url}: {e}")
-        return np.nan
 
 def get_gentronics_website_price(url: str) -> str:
     if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
@@ -472,10 +460,9 @@ class TotalToolsScraper(CompanyScraper):
 class WAIndustrialScraper(CompanyScraper):
     def __init__(self):
         super().__init__("WA INDUSTRIAL SUPPLIES WEBSITE", "WA INDUSTRIAL SUPPLIES WEBSITE")
-        self.xpath = ("/html/body/div[1]/div/div[1]/div[1]/div/div/div[2]/div[2]/div/div[1]/div/div/div/div/div[2]/div/div/div/div[2]/form/section[1]/div[1]/div/h3/span")
         self.driver = init_driver()
     def get_price(self, url: str) -> str:
-        return fetch_value_by_xpath(self.driver, url, self.xpath)
+        return get_waindustrialsupplies_price(self.driver, url)
     def close(self):
         close_driver(self.driver)
 

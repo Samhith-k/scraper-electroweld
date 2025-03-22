@@ -15,13 +15,24 @@ def get_hares_and_forbes_price(url, driver):
             return np.nan
         if not url.startswith("https://www.machineryhouse.com.au"):
             return np.nan
-
+                    
         xpath_price = "/html/body/div[1]/div[3]/main/section/div/div[4]/div[2]/div[1]/div[3]/div/div[2]/span"
+        xpath_price_2 = "/html/body/div[1]/div[3]/main/section/div/div[4]/div[2]/div[1]/div[2]/div/div[2]/meta"
+
         driver.get(url)
         time.sleep(10)  # Adjust as necessary based on your connection and the site's response
-        
-        price_element = driver.find_element(By.XPATH, xpath_price)
-        return price_element.text
+
+        price_elements = driver.find_elements(By.XPATH, xpath_price)
+        price_elements_2 = driver.find_elements(By.XPATH, xpath_price_2)
+
+        if not price_elements:
+            if not price_elements_2:
+                return np.nan
+            else:
+                return price_elements_2[0].get_attribute("content")
+        else:
+            return price_elements[0].text
+
     except Exception as e:
         # Log the error if needed (print or use logging)
         print(f"Error retrieving price from {url}: {e}")
@@ -35,7 +46,7 @@ if __name__ == "__main__":
     chrome_options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(options=chrome_options)
-    url = "https://www.machineryhouse.com.au/w2442"
+    url = "https://www.machineryhouse.com.au/w194"
     price = get_hares_and_forbes_price(url,driver)
     print(price)
     driver.quit()
