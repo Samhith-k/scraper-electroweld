@@ -691,6 +691,7 @@ def combine_csv(scrapers):
         if os.path.exists(filename):
             df_temp = pd.read_csv(filename)
             dfs.append(df_temp)
+    
     if dfs:
         combined_df = pd.concat(dfs, ignore_index=True)
         combined_df.sort_values("PRODUCT NAME", inplace=True)
