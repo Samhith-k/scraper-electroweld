@@ -399,6 +399,74 @@ def get_australia_industrial_group_price(url: str) -> str:
         return price
     else:
         return np.nan    
+    
+def get_trade_tools_price(url: str) -> str:
+    if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
+        return np.nan
+    if not url.startswith("https://www.tradetools.com/"):
+        return np.nan
+        
+    try:
+        with httpx.Client(
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            },
+            follow_redirects=True,
+            timeout=15.0,
+        ) as session:
+            response = session.get(url)
+    except (httpx.ReadTimeout, Exception) as e:
+        print(f"Error fetching Trade Tools URL {url}: {e}")
+        return np.nan
+        
+    sel = Selector(response.text)
+    try:
+        # Get the container with the price elements
+        price_container = sel.css("div.price-2To")
+        if not price_container:
+            price_container = sel.css("div.priceContainer-3Tv")
+        
+        if price_container:
+            # Extract all span elements that contain price components
+            dollar_sign = price_container.css("span:nth-child(1)::text").get("").strip()
+            dollars = price_container.css("span:nth-child(2)::text").get("").strip()
+            comma = price_container.css("span:nth-child(3)::text").get("").strip()
+            cents_part = price_container.css("span:nth-child(4)::text").get("").strip()
+            decimal_point = price_container.css("span.cents-1T3:nth-child(5)::text").get("").strip()
+            cents = price_container.css("span.cents-1T3:nth-child(6)::text").get("").strip()
+            
+            # Combine all parts (remove $ and commas)
+            full_price = f"{dollars}{cents_part}{decimal_point}{cents}".replace("$", "").replace(",", "").strip()
+            if full_price:
+                return full_price
+    except Exception as e:
+        print(f"Error extracting price components: {e}")
+    
+    try:
+        price_text = sel.xpath('/html/body/div[2]/div[1]/main/div/div/div[2]/div/form/div[2]/div/div/div//text()').getall()
+        # Filter out non-price elements and combine
+        price_text = [t.strip() for t in price_text if t.strip() and t.strip() != "Inc GST"]
+        combined_price = "".join(price_text).replace("$", "").replace(",", "").replace(".", "")
+        
+        # Format as dollars and cents
+        if combined_price and len(combined_price) > 2:
+            dollars = combined_price[:-2]
+            cents = combined_price[-2:]
+            return f"{dollars}.{cents}"
+    except Exception as e:
+        print(f"Error extracting price with XPath: {e}")
+    
+    try:
+        price_element = sel.css("div.priceRangeWrapper-232 span::text").getall()
+        if price_element:
+            # Join all text and clean
+            price = "".join(price_element).replace("$", "").replace(",", "").replace("Inc GST", "").strip()
+            return price
+    except Exception as e:
+        print(f"Error with fallback price extraction: {e}")
+        
+    return np.nan    
 
 class CompanyScraper:
     def __init__(self, name, pattern):
@@ -566,6 +634,12 @@ class AustraliaIndustrialGroupScraper(CompanyScraper):
     def get_price(self, url: str) -> str:
         return get_australia_industrial_group_price(url)
 
+class TradeToolsScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("TRADE TOOLS", "TRADE TOOLS")
+    
+    def get_price(self, url: str) -> str:
+        return get_trade_tools_price(url)
 
 def read_and_prepare_df():
     df = pd.read_excel('Pricing.xlsx', sheet_name="Sheet2")
@@ -649,7 +723,8 @@ def main():
         HampdonScraper(),
         NationalWeldingScraper(),
         PrimeSuppliesScraper(),
-        AustraliaIndustrialGroupScraper()
+        AustraliaIndustrialGroupScraper(),
+        TradeToolsScraper()
     ]
     while True:
         print("\nMENU")
