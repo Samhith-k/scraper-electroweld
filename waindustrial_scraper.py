@@ -13,7 +13,7 @@ def get_waindustrialsupplies_price(driver, url: str) -> str:
 
     try:
         driver.set_page_load_timeout(15)
-        print("DEBUG: Fetching URL:", url)
+        #print("DEBUG: Fetching URL:", url)
         driver.get(url)
         # Wait for JavaScript to load the dynamic content.
         time.sleep(5)  # Adjust as necessary for the content to load
@@ -24,7 +24,7 @@ def get_waindustrialsupplies_price(driver, url: str) -> str:
         price_text = price_element.text.strip()
         return price_text
     except Exception as e:
-        print("Exception occurred while fetching price:", e)
+        #print("Exception occurred while fetching price:", e)
         return np.nan
 
 if __name__ == "__main__":
