@@ -354,6 +354,51 @@ def get_primesupplies_price(url: str) -> str:
         return price
     else:
         return np.nan
+    
+def get_australia_industrial_group_price(url: str) -> str:
+    if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
+        return np.nan
+    if not url.startswith("https://www.australiaindustrialgroup.com.au/product-page/"):
+        return np.nan
+        
+    try:
+        with httpx.Client(
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            },
+            follow_redirects=True,
+            timeout=15.0,
+        ) as session:
+            response = session.get(url)
+    except (httpx.ReadTimeout, Exception) as e:
+        print(f"Error fetching Australia Industrial Group URL {url}: {e}")
+        return np.nan
+        
+    sel = Selector(response.text)
+    
+    # Method 1: Using the specific full XPath from the screenshot
+    price = sel.xpath("/html/body/div[1]/div/div[3]/div/main/div/div/div[2]/div/div/div/section/div[2]/div/div/div/div/div/div/article/div[2]/section[2]/div[1]/div/div/div[2]/span[1]/text()").get(default="").strip()
+    
+    # Method 2: Using the data-hook attributes shown in the screenshot
+    if not price:
+        price = sel.css('span[data-hook="formatted-primary-price"]::text').get(default="").strip()
+    
+    # Method 3: Using class name
+    if not price:
+        price = sel.css('span.hM4gpp[data-hook="formatted-primary-price"]::text').get(default="").strip()
+    
+    # Method 4: Broader selector
+    if not price:
+        price = sel.css('div[data-hook="product-price"] span[data-wix-price]::text').get(default="").strip()
+    
+    # Clean up the price
+    if price:
+        # Remove currency symbol and commas
+        price = price.replace("$", "").replace(",", "").strip()
+        return price
+    else:
+        return np.nan    
 
 class CompanyScraper:
     def __init__(self, name, pattern):
@@ -513,6 +558,14 @@ class PrimeSuppliesScraper(CompanyScraper):
     
     def get_price(self, url: str) -> str:
         return get_primesupplies_price(url)
+    
+class AustraliaIndustrialGroupScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("AUSTRALIA INDUSTRIAL GROUP", "AUSTRALIA INDUSTRIAL")
+    
+    def get_price(self, url: str) -> str:
+        return get_australia_industrial_group_price(url)
+
 
 def read_and_prepare_df():
     df = pd.read_excel('Pricing.xlsx', sheet_name="Sheet2")
@@ -595,7 +648,8 @@ def main():
         AlphaweldScraper(),
         HampdonScraper(),
         NationalWeldingScraper(),
-        PrimeSuppliesScraper()
+        PrimeSuppliesScraper(),
+        AustraliaIndustrialGroupScraper()
     ]
     while True:
         print("\nMENU")

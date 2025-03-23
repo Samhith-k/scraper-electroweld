@@ -6,3 +6,6 @@ selenium>=4.0.0
 webdriver-manager>=3.5.0
 parsel>=1.6.0
 concurrent-futures>=3.0.0
+requests>=2.25.0
+beautifulsoup4>=4.9.0
+lxml>=4.6.0
