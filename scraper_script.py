@@ -25,6 +25,9 @@ from scrapers.waindustrial_scraper import get_waindustrialsupplies_price
 from scrapers.gasrep_scraper import get_gasrep_price
 from scrapers.electroweld_website_scraper import get_electroweld_website_price
 from scrapers.bilba_website_scraper import get_bilba_website_price
+from scrapers.stafford_welding_scraper import get_stafford_welding_price
+from scrapers.gasweld_scraper import get_gasweld_price
+from scrapers.weldquip_scraper import get_weldquip_price
 
 # Configure logging: the log file will be named with the current timestamp.
 log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.log")
@@ -599,6 +602,27 @@ class TradeToolsScraper(CompanyScraper):
         super().__init__("TRADE TOOLS", "TRADE TOOLS")
     def get_price(self, url: str) -> str:
         return get_trade_tools_price(url)
+    
+class StaffordWeldingScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("STAFFORD WELDING PRODUCTS", "STAFFORD WELDING")
+    def get_price(self, url: str) -> str:
+        return get_stafford_welding_price(url)
+    
+class GasweldScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("GASWELD", "GASWELD")
+    
+    def get_price(self, url: str) -> str:
+        return get_gasweld_price(url)
+    
+class WeldquipScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("WELDQUIP PRODUCTS", "WELDQUIP")
+    
+    def get_price(self, url: str) -> str:
+        return get_weldquip_price(url)
+
 
 # ------------------------- End of Scraper Classes -------------------------
 
@@ -727,7 +751,10 @@ def main():
         PrimeSuppliesScraper(),
         AustraliaIndustrialGroupScraper(),
         TradeToolsScraper(),
-        GasRepScraper()
+        GasRepScraper(),
+        StaffordWeldingScraper(),
+        GasweldScraper(),
+        WeldquipScraper(),
     ]
     while True:
         print("\nMENU")
