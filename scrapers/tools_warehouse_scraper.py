@@ -35,7 +35,7 @@ def get_toolswarehouse_price(url: str) -> str:
         with httpx.Client(headers=headers, follow_redirects=True, timeout=15.0) as client:
             response = client.get(url)
     except (httpx.ReadTimeout, Exception) as e:
-        print("Error fetching URL:", e)
+        #print("Error fetching URL:", e)
         return np.nan
 
     # Debug: print response length

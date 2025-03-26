@@ -19,7 +19,7 @@ def get_bilba_website_price(url: str) -> str:
         response = client.get(url)
     sel = Selector(response.text)
     price = sel.css("span.price-item.price-item-regular::text").get(default="").strip()
-    return price[1:] if price.startswith("$") else priceb
+    return price[1:] if price.startswith("$") else price
 
 # Example usage:
 if __name__ == "__main__":
