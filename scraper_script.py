@@ -12,15 +12,15 @@ from selenium.webdriver.common.by import By
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 import concurrent.futures
-from hare_and_forbes_scraper import get_hares_and_forbes_price
 
-from tools_warehouse_scraper import get_toolswarehouse_price
-from kennedys_scraper import get_kennedys_price
-from vektools_scraper import get_vektools_price
-from sydney_tools_scraper import get_sydney_tools_price
-from total_tools_scraper import get_total_tools_price
-from alphaweld import get_alphaweld_price
-from waindustrial_scraper import get_waindustrialsupplies_price
+from scrapers.hare_and_forbes_scraper import get_hares_and_forbes_price
+from scrapers.tools_warehouse_scraper import get_toolswarehouse_price
+from scrapers.kennedys_scraper import get_kennedys_price
+from scrapers.vektools_scraper import get_vektools_price
+from scrapers.sydney_tools_scraper import get_sydney_tools_price
+from scrapers.total_tools_scraper import get_total_tools_price
+from scrapers.alphaweld_scraper import get_alphaweld_price
+from scrapers.waindustrial_scraper import get_waindustrialsupplies_price
 
 def init_driver() -> webdriver.Chrome:
     chrome_options = Options()
@@ -165,7 +165,6 @@ def get_national_welding_price(url: str) -> str:
     return price_text.replace("$", "").replace(",", "").strip()
 
 def get_hampdon_price(url: str) -> str:
-    
     # Validate the URL
     if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
         return np.nan
@@ -641,8 +640,8 @@ class TradeToolsScraper(CompanyScraper):
     def get_price(self, url: str) -> str:
         return get_trade_tools_price(url)
 
-def read_and_prepare_df():
-    df = pd.read_excel('Pricing.xlsx', sheet_name="Sheet2")
+def read_and_prepare_df(input_file):
+    df = pd.read_excel(input_file, sheet_name="Sheet2")
     df['PRODUCT SKU'] = df['PRODUCT SKU'].str.strip().str.upper()
     df['PRODUCT NAME'] = df['PRODUCT NAME'].str.strip().str.upper()
     df['Shop Name'] = df['Shop Name'].str.strip().str.upper()
@@ -652,7 +651,7 @@ def read_and_prepare_df():
     df_sub[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME']] = df_sub[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME']].ffill()
     return df_sub
 
-def scrape_all(df_sub, scrapers):
+def scrape_all(df_sub, scrapers, scraper_output_folder, combined_csv_folder):
     df_list = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         future_to_scraper = {executor.submit(scraper.scrape, df_sub): scraper for scraper in scrapers}
@@ -664,30 +663,32 @@ def scrape_all(df_sub, scrapers):
                 print(f"{scraper.name} generated an exception: {e}")
             else:
                 df_list.append(df_company)
-                filename = f"{scraper.name.replace(' ', '_')}.csv"
+                filename = os.path.join(scraper_output_folder, f"{scraper.name.replace(' ', '_')}.csv")
                 df_company.to_csv(filename, index=False)
             if hasattr(scraper, 'close'):
                 scraper.close()
     if df_list:
         combined_df = pd.concat(df_list, ignore_index=True)
         combined_df.sort_values("PRODUCT NAME", inplace=True)
-        combined_df.to_csv('combined.csv', index=False)
-        print("Scraped all companies. Combined CSV saved as combined.csv")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        combined_filename = os.path.join(combined_csv_folder, f"combined_{timestamp}.csv")
+        combined_df.to_csv(combined_filename, index=False)
+        print(f"Scraped all companies. Combined CSV saved as {combined_filename}")
     else:
         print("No data scraped.")
 
-def scrape_single(df_sub, scraper):
+def scrape_single(df_sub, scraper, scraper_output_folder):
     df_company = scraper.scrape(df_sub)
-    filename = f"{scraper.name.replace(' ', '_')}.csv"
+    filename = os.path.join(scraper_output_folder, f"{scraper.name.replace(' ', '_')}.csv")
     df_company.to_csv(filename, index=False)
     if hasattr(scraper, 'close'):
         scraper.close()
     print(f"{scraper.name} data scraped and saved as {filename}")
 
-def combine_csv(scrapers):
+def combine_csv(scrapers, scraper_output_folder, combined_csv_folder):
     dfs = []
     for scraper in scrapers:
-        filename = f"{scraper.name.replace(' ', '_')}.csv"
+        filename = os.path.join(scraper_output_folder, f"{scraper.name.replace(' ', '_')}.csv")
         if os.path.exists(filename):
             df_temp = pd.read_csv(filename)
             dfs.append(df_temp)
@@ -695,13 +696,24 @@ def combine_csv(scrapers):
     if dfs:
         combined_df = pd.concat(dfs, ignore_index=True)
         combined_df.sort_values("PRODUCT NAME", inplace=True)
-        combined_df.to_csv('combined.csv', index=False)
-        print("CSV files combined into combined.csv")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        combined_filename = os.path.join(combined_csv_folder, f"combined_{timestamp}.csv")
+        combined_df.to_csv(combined_filename, index=False)
+        print(f"CSV files combined into {combined_filename}")
     else:
         print("No CSV files found to combine.")
 
 def main():
-    df_sub = read_and_prepare_df()
+    # Declare input file and output folders for easier changes.
+    input_file = 'Pricing.xlsx'
+    scraper_output_folder = "scraper_outputs"
+    combined_csv_folder = "combined_csvs"
+    
+    # Create output directories if they do not exist.
+    os.makedirs(scraper_output_folder, exist_ok=True)
+    os.makedirs(combined_csv_folder, exist_ok=True)
+    
+    df_sub = read_and_prepare_df(input_file)
     print(df_sub.head())
     scrapers = [
         EbayScraper(),
@@ -731,11 +743,11 @@ def main():
         print("\nMENU")
         print("1. Scrape all")
         print("2. Choose a company to scrape")
-        print("3. Create new combined.csv")
+        print("3. Create new combined CSV")
         print("4. Exit")
         choice = input("Enter option: ").strip()
         if choice == "1":
-            scrape_all(df_sub, scrapers)
+            scrape_all(df_sub, scrapers, scraper_output_folder, combined_csv_folder)
         elif choice == "2":
             print("\nSelect a company to scrape:")
             for idx, scraper in enumerate(scrapers, start=1):
@@ -744,13 +756,13 @@ def main():
             try:
                 comp_idx = int(comp_choice) - 1
                 if 0 <= comp_idx < len(scrapers):
-                    scrape_single(df_sub, scrapers[comp_idx])
+                    scrape_single(df_sub, scrapers[comp_idx], scraper_output_folder)
                 else:
                     print("Invalid company number.")
             except ValueError:
                 print("Invalid input. Please enter a number.")
         elif choice == "3":
-            combine_csv(scrapers)
+            combine_csv(scrapers, scraper_output_folder, combined_csv_folder)
         elif choice == "4":
             print("Exiting.")
             break

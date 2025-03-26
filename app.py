@@ -12,12 +12,11 @@ st.set_page_config(
 )
 
 # Sidebar navigation
-page = st.sidebar.radio("Navigation", ["Price Comparison"])
+page = st.sidebar.radio("Navigation", ["Welders Comparison","Helmet Comparison"])
 
 if page == "Price Comparison":
     st.image(logo_image, width=150)
     st.title("Hardware Parts Price Comparison")
-    st.markdown("### Compare Prices of Hardware Parts")
     
     @st.cache_data
     def load_data():
