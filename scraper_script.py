@@ -622,6 +622,14 @@ class WeldquipScraper(CompanyScraper):
     
     def get_price(self, url: str) -> str:
         return get_weldquip_price(url)
+    
+from scrapers.toolking_scraper import get_toolking_price
+class ToolKingScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("Robson's Tool King", "Tool King")
+    
+    def get_price(self, url: str) -> str:
+        return get_toolking_price(url)
 
 
 # ------------------------- End of Scraper Classes -------------------------
@@ -755,6 +763,7 @@ def main():
         StaffordWeldingScraper(),
         GasweldScraper(),
         WeldquipScraper(),
+        ToolKingScraper()
     ]
     while True:
         print("\nMENU")
