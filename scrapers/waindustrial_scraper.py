@@ -16,7 +16,7 @@ def get_waindustrialsupplies_price(driver, url: str) -> str:
         #print("DEBUG: Fetching URL:", url)
         driver.get(url)
         # Wait for JavaScript to load the dynamic content.
-        time.sleep(5)  # Adjust as necessary for the content to load
+        time.sleep(2)  # Adjust as necessary for the content to load
 
         # Extract the price using the full XPath.
         xpath_price = "/html/body/div[1]/div/div[1]/div[1]/div/div/div[2]/div[2]/div/div[1]/div/div/div/div/div/div[2]/div/div/div/div[2]/form/section[1]/div[1]/div/h3/span"

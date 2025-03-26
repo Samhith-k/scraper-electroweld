@@ -20,7 +20,7 @@ def get_hares_and_forbes_price(url, driver):
         xpath_price_2 = "/html/body/div[1]/div[3]/main/section/div/div[4]/div[2]/div[1]/div[2]/div/div[2]/meta"
 
         driver.get(url)
-        time.sleep(10)  # Adjust as necessary based on your connection and the site's response
+        time.sleep(12)  # Adjust as necessary based on your connection and the site's response
 
         price_elements = driver.find_elements(By.XPATH, xpath_price)
         price_elements_2 = driver.find_elements(By.XPATH, xpath_price_2)

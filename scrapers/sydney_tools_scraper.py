@@ -21,7 +21,7 @@ def get_sydney_tools_price(url, driver):
         driver.get(url)
         
         # Wait for the page to load dynamic content
-        time.sleep(3)
+        time.sleep(2)
         
         # Try to extract the price using the exact XPath provided
         try:

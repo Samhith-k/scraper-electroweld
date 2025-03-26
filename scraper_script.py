@@ -5,6 +5,7 @@ import datetime
 import re
 import time
 import httpx
+import logging
 from parsel import Selector
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
@@ -21,6 +22,18 @@ from scrapers.sydney_tools_scraper import get_sydney_tools_price
 from scrapers.total_tools_scraper import get_total_tools_price
 from scrapers.alphaweld_scraper import get_alphaweld_price
 from scrapers.waindustrial_scraper import get_waindustrialsupplies_price
+from scrapers.gasrep_scraper import get_gasrep_price
+from scrapers.electroweld_website_scraper import get_electroweld_website_price
+from scrapers.bilba_website_scraper import get_bilba_website_price
+
+# Configure logging: the log file will be named with the current timestamp.
+log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.log")
+logging.basicConfig(
+    filename=log_filename,
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 def init_driver() -> webdriver.Chrome:
     chrome_options = Options()
@@ -68,43 +81,6 @@ def get_ebay_price(url: str) -> str:
     sel = Selector(response.text)
     price = sel.css(".x-price-primary>span::text").get(default="").strip()
     return price
-
-def get_electroweld_website_price(url: str) -> str:
-    if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
-        return np.nan
-    if not url.startswith("https://www.electroweld.com.au/product/"):
-        return np.nan
-    session = httpx.Client(
-        headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        },
-        follow_redirects=True
-    )
-    try:
-        response = session.get(url)
-    except (httpx.ReadTimeout, Exception):
-        return np.nan
-    sel = Selector(response.text)
-    price = sel.css("p.w-post-elm.product_field.price span.woocommerce-Price-amount.amount bdi::text").get(default="").strip()
-    return price[1:] if price.startswith("$") else price
-
-def get_bilba_website_price(url: str) -> str:
-    if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
-        return np.nan
-    if not url.startswith("https://bilba.com.au/products"):
-        return np.nan
-    with httpx.Client(
-        headers={
-            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        },
-        follow_redirects=True
-    ) as client:
-        response = client.get(url)
-    sel = Selector(response.text)
-    price = sel.css("span.price-item.price-item-regular::text").get(default="").strip()
-    return price[1:] if price.startswith("$") else price
 
 def get_gentronics_website_price(url: str) -> str:
     if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
@@ -165,7 +141,6 @@ def get_national_welding_price(url: str) -> str:
     return price_text.replace("$", "").replace(",", "").strip()
 
 def get_hampdon_price(url: str) -> str:
-    # Validate the URL
     if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
         return np.nan
     if not url.startswith("https://www.hampdon.com.au/"):
@@ -191,27 +166,17 @@ def get_hampdon_price(url: str) -> str:
     except (httpx.RequestError, httpx.ReadTimeout, Exception):
         return np.nan
 
-    # Parse the response text with Selector
     sel = Selector(response.text)
-    
-    # Locate the price element using the appropriate CSS selector
     price_element = sel.css("div.productprice.productpricetext[itemprop='price']")
     if not price_element:
         return np.nan
-
-    # First, try to extract the price using the "content" attribute
     content_attr = price_element.attrib.get("content", "")
     if content_attr:
-        cleaned_price = content_attr.strip()
-        return cleaned_price
-
-    # Fallback: extract the inner text and clean it
+        return content_attr.strip()
     price_text = price_element.css("::text").get()
     if not price_text:
         return np.nan
-    cleaned_price = price_text.replace("$", "").replace(",", "").strip()
-    
-    return cleaned_price
+    return price_text.replace("$", "").replace(",", "").strip()
 
 def get_weld_com_au_price(url: str) -> str:
     if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
@@ -346,9 +311,7 @@ def get_primesupplies_price(url: str) -> str:
         price = sel.css(".price .woocommerce-Price-amount.amount::text").get(default="").strip()
     
     if price:
-        # Remove currency symbol if present
         price = price.replace("$", "").strip()
-        # Remove "inc. GST" text if present
         price = price.replace("inc. GST", "").strip()
         return price
     else:
@@ -375,25 +338,14 @@ def get_australia_industrial_group_price(url: str) -> str:
         return np.nan
         
     sel = Selector(response.text)
-    
-    # Method 1: Using the specific full XPath from the screenshot
     price = sel.xpath("/html/body/div[1]/div/div[3]/div/main/div/div/div[2]/div/div/div/section/div[2]/div/div/div/div/div/div/article/div[2]/section[2]/div[1]/div/div/div[2]/span[1]/text()").get(default="").strip()
-    
-    # Method 2: Using the data-hook attributes shown in the screenshot
     if not price:
         price = sel.css('span[data-hook="formatted-primary-price"]::text').get(default="").strip()
-    
-    # Method 3: Using class name
     if not price:
         price = sel.css('span.hM4gpp[data-hook="formatted-primary-price"]::text').get(default="").strip()
-    
-    # Method 4: Broader selector
     if not price:
         price = sel.css('div[data-hook="product-price"] span[data-wix-price]::text').get(default="").strip()
-    
-    # Clean up the price
     if price:
-        # Remove currency symbol and commas
         price = price.replace("$", "").replace(",", "").strip()
         return price
     else:
@@ -421,13 +373,11 @@ def get_trade_tools_price(url: str) -> str:
         
     sel = Selector(response.text)
     try:
-        # Get the container with the price elements
         price_container = sel.css("div.price-2To")
         if not price_container:
             price_container = sel.css("div.priceContainer-3Tv")
         
         if price_container:
-            # Extract all span elements that contain price components
             dollar_sign = price_container.css("span:nth-child(1)::text").get("").strip()
             dollars = price_container.css("span:nth-child(2)::text").get("").strip()
             comma = price_container.css("span:nth-child(3)::text").get("").strip()
@@ -435,7 +385,6 @@ def get_trade_tools_price(url: str) -> str:
             decimal_point = price_container.css("span.cents-1T3:nth-child(5)::text").get("").strip()
             cents = price_container.css("span.cents-1T3:nth-child(6)::text").get("").strip()
             
-            # Combine all parts (remove $ and commas)
             full_price = f"{dollars}{cents_part}{decimal_point}{cents}".replace("$", "").replace(",", "").strip()
             if full_price:
                 return full_price
@@ -444,11 +393,8 @@ def get_trade_tools_price(url: str) -> str:
     
     try:
         price_text = sel.xpath('/html/body/div[2]/div[1]/main/div/div/div[2]/div/form/div[2]/div/div/div//text()').getall()
-        # Filter out non-price elements and combine
         price_text = [t.strip() for t in price_text if t.strip() and t.strip() != "Inc GST"]
         combined_price = "".join(price_text).replace("$", "").replace(",", "").replace(".", "")
-        
-        # Format as dollars and cents
         if combined_price and len(combined_price) > 2:
             dollars = combined_price[:-2]
             cents = combined_price[-2:]
@@ -459,13 +405,14 @@ def get_trade_tools_price(url: str) -> str:
     try:
         price_element = sel.css("div.priceRangeWrapper-232 span::text").getall()
         if price_element:
-            # Join all text and clean
             price = "".join(price_element).replace("$", "").replace(",", "").replace("Inc GST", "").strip()
             return price
     except Exception as e:
         print(f"Error with fallback price extraction: {e}")
         
     return np.nan    
+
+# ------------------------- Scraper Classes -------------------------
 
 class CompanyScraper:
     def __init__(self, name, pattern):
@@ -478,7 +425,7 @@ class CompanyScraper:
     def scrape(self, df: pd.DataFrame) -> pd.DataFrame:
         df_company = df[df['Shop Name'].str.contains(self.pattern, case=False, na=False, regex=True)].copy()
         df_company['Price'] = df_company['PRODUCT LINK'].apply(self.get_price)
-        df_company['Price_Bundle'] = df_company['BUNDLE LINK'].apply(self.get_price)
+        df_company['Price_Bundle'] = df_company.get('BUNDLE LINK', np.nan)
         total = len(df_company)
         valid = df_company['PRODUCT LINK'].notna().sum()
         extracted = df_company['Price'].notna().sum()
@@ -601,6 +548,22 @@ class HareAndForbesScraper(CompanyScraper):
     def close(self):
         close_driver(self.driver)
 
+class GasRepScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("GASREP", "GASREP")
+        chrome_options = Options()
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-infobars")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        self.driver = webdriver.Chrome(options=chrome_options)
+        
+    def get_price(self, url: str) -> str:
+        return get_gasrep_price(url, self.driver)
+    
+    def close(self):
+        close_driver(self.driver)
+
 class AlphaweldScraper(CompanyScraper):
     def __init__(self):
         super().__init__("ALPHAWELD", "alphaweld")
@@ -622,23 +585,22 @@ class NationalWeldingScraper(CompanyScraper):
 class PrimeSuppliesScraper(CompanyScraper):
     def __init__(self):
         super().__init__("PRIME SUPPLIES", "PRIME SUPPLIES")
-    
     def get_price(self, url: str) -> str:
         return get_primesupplies_price(url)
     
 class AustraliaIndustrialGroupScraper(CompanyScraper):
     def __init__(self):
         super().__init__("AUSTRALIA INDUSTRIAL GROUP", "AUSTRALIA INDUSTRIAL")
-    
     def get_price(self, url: str) -> str:
         return get_australia_industrial_group_price(url)
 
 class TradeToolsScraper(CompanyScraper):
     def __init__(self):
         super().__init__("TRADE TOOLS", "TRADE TOOLS")
-    
     def get_price(self, url: str) -> str:
         return get_trade_tools_price(url)
+
+# ------------------------- End of Scraper Classes -------------------------
 
 def read_and_prepare_df(input_file):
     df = pd.read_excel(input_file, sheet_name="Sheet2")
@@ -647,26 +609,46 @@ def read_and_prepare_df(input_file):
     df['Shop Name'] = df['Shop Name'].str.strip().str.upper()
     df.loc[df['Shop Name'] == 'WA INDUSTRIAL SUPPLIES', 'Shop Name'] += ' EBAY'
     df.loc[df['Shop Name'] == 'WElDERS ONLINE', 'Shop Name'] += ' EBAY'
-    df_sub = df[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME', 'Shop Name', 'PRODUCT LINK', 'Note', 'BUNDLE LINK', 'Comment']].copy()
+    df_sub = df[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME', 'Shop Name', 'PRODUCT LINK']].copy()
     df_sub[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME']] = df_sub[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME']].ffill()
     return df_sub
 
+# A helper function that times the scraping process for each company.
+def timed_scrape(scraper, df_sub):
+    start = time.time()
+    df_company = scraper.scrape(df_sub)
+    elapsed = time.time() - start
+    return df_company, elapsed
+
 def scrape_all(df_sub, scrapers, scraper_output_folder, combined_csv_folder):
     df_list = []
+    scraper_times = {}
+    # Use ThreadPoolExecutor to run scrapers concurrently.
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_scraper = {executor.submit(scraper.scrape, df_sub): scraper for scraper in scrapers}
+        future_to_scraper = {executor.submit(timed_scrape, scraper, df_sub): scraper for scraper in scrapers}
         for future in concurrent.futures.as_completed(future_to_scraper):
             scraper = future_to_scraper[future]
             try:
-                df_company = future.result()
+                df_company, elapsed = future.result()
+                scraper_times[scraper.name] = elapsed
             except Exception as e:
                 print(f"{scraper.name} generated an exception: {e}")
             else:
                 df_list.append(df_company)
                 filename = os.path.join(scraper_output_folder, f"{scraper.name.replace(' ', '_')}.csv")
                 df_company.to_csv(filename, index=False)
+                # Log any URLs with missing price
+                missing_prices = df_company[df_company['Price'].isna()]
+                for _, row in missing_prices.iterrows():
+                    url = row['PRODUCT LINK']
+                    logging.info(f"Missing Price - {scraper.name},{url}")
             if hasattr(scraper, 'close'):
                 scraper.close()
+    # Print and log elapsed time for each company
+    for company, elapsed in scraper_times.items():
+        message = f"{company} took {elapsed:.2f} seconds."
+        print(message)
+        logging.info(message)
     if df_list:
         combined_df = pd.concat(df_list, ignore_index=True)
         combined_df.sort_values("PRODUCT NAME", inplace=True)
@@ -678,9 +660,18 @@ def scrape_all(df_sub, scrapers, scraper_output_folder, combined_csv_folder):
         print("No data scraped.")
 
 def scrape_single(df_sub, scraper, scraper_output_folder):
+    start = time.time()
     df_company = scraper.scrape(df_sub)
+    elapsed = time.time() - start
     filename = os.path.join(scraper_output_folder, f"{scraper.name.replace(' ', '_')}.csv")
     df_company.to_csv(filename, index=False)
+    # Log URLs missing a price
+    missing_prices = df_company[df_company['Price'].isna()]
+    for _, row in missing_prices.iterrows():
+        url = row['PRODUCT LINK']
+        logging.info(f"Missing Price - {scraper.name},{url}")
+    print(f"{scraper.name} took {elapsed:.2f} seconds.")
+    logging.info(f"{scraper.name} took {elapsed:.2f} seconds.")
     if hasattr(scraper, 'close'):
         scraper.close()
     print(f"{scraper.name} data scraped and saved as {filename}")
@@ -704,12 +695,10 @@ def combine_csv(scrapers, scraper_output_folder, combined_csv_folder):
         print("No CSV files found to combine.")
 
 def main():
-    # Declare input file and output folders for easier changes.
     input_file = 'Pricing.xlsx'
     scraper_output_folder = "scraper_outputs"
     combined_csv_folder = "combined_csvs"
     
-    # Create output directories if they do not exist.
     os.makedirs(scraper_output_folder, exist_ok=True)
     os.makedirs(combined_csv_folder, exist_ok=True)
     
@@ -737,7 +726,8 @@ def main():
         NationalWeldingScraper(),
         PrimeSuppliesScraper(),
         AustraliaIndustrialGroupScraper(),
-        TradeToolsScraper()
+        TradeToolsScraper(),
+        GasRepScraper()
     ]
     while True:
         print("\nMENU")
