@@ -1,14 +1,13 @@
 import numpy as np
+import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import pandas as pd
-
 
 def get_trade_tools_price(url: str, driver) -> str:
-    # Validate the URL
+    # Validate the URL: ensure it's a non-empty string starting with the expected domain.
     if not isinstance(url, str) or pd.isna(url) or url.strip() == "" or not url.startswith("https://www.tradetools.com/"):
         return np.nan
     
@@ -16,9 +15,16 @@ def get_trade_tools_price(url: str, driver) -> str:
         driver.get(url)
         wait = WebDriverWait(driver, 10)
         price_container = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.price-2To")))
-        price_element = price_container.find_element(By.CSS_SELECTOR, "div > span:nth-child(2)")
-        price_text = price_element.text.strip()
-        return price_text
+        # Locate the inner <div> that contains the price spans.
+        inner_div = price_container.find_element(By.CSS_SELECTOR, "div")
+        spans = inner_div.find_elements(By.TAG_NAME, "span")
+        # Append all text from the spans.
+        combined_text = "".join([span.text for span in spans]).strip()
+        # Remove the '$' sign.
+        numeric_text = combined_text.replace("$", "").strip()
+        # Split on the dot to get just the integer portion.
+        final_price = numeric_text
+        return final_price
     except Exception:
         return np.nan
 
