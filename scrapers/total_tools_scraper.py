@@ -44,7 +44,7 @@ def get_total_tools_price(url: str) -> str:
         ) as client:
             response = client.get(url)
     except (httpx.RequestError, httpx.ReadTimeout, Exception) as e:
-        print("DEBUG: Exception occurred while fetching URL:", e)
+        #print("DEBUG: Exception occurred while fetching URL:", e)
         return np.nan
 
     # Parse the response text with parsel's Selector

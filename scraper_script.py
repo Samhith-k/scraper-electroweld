@@ -61,8 +61,6 @@ def fetch_value_by_xpath(driver: webdriver.Chrome, url: str, xpath: str) -> str:
         value = element.text.strip()
         return value.replace("A$", "")
     except Exception as e:
-        print("Exception:", e)
-        print("Exception occurred while fetching value for URL:", url)
         return np.nan
 
 def get_ebay_price(url: str) -> str:
@@ -301,7 +299,7 @@ def get_primesupplies_price(url: str) -> str:
         ) as session:
             response = session.get(url)
     except (httpx.ReadTimeout, Exception) as e:
-        print(f"Error fetching Prime Supplies URL {url}: {e}")
+        #print(f"Error fetching Prime Supplies URL {url}: {e}")
         return np.nan
         
     sel = Selector(response.text)

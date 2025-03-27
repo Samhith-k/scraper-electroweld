@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from PIL import Image
+import glob
+import os
 
 # Set page configuration
 logo_image = Image.open("./logo-png.png")
@@ -14,13 +16,22 @@ st.set_page_config(
 # Sidebar navigation
 page = st.sidebar.radio("Navigation", ["Welders Comparison","Helmet Comparison"])
 
-if page == "Price Comparison":
+if page == "Welders Comparison":
     st.image(logo_image, width=150)
     st.title("Hardware Parts Price Comparison")
     
     @st.cache_data
     def load_data():
-        df = pd.read_csv("combined.csv")
+        # Find all CSV files matching the pattern in the combined_csvs directory
+        csv_files = glob.glob("combined_csvs/combined_*.csv")
+        if not csv_files:
+            st.error("No CSV files found in the combined_csvs directory!")
+            return pd.DataFrame()
+        # Sort files by modification time (oldest first)
+        csv_files.sort(key=lambda x: os.path.getmtime(x))
+        # Select the most recently modified file
+        latest_csv = csv_files[-1]
+        df = pd.read_csv(latest_csv)
         df.columns = df.columns.str.strip()
         
         def parse_price(price):
@@ -107,9 +118,9 @@ if page == "Price Comparison":
             # Create a display dictionary that includes Brand, Product, and the company prices.
             display_data = {"Brand": row["BRAND"], "Product": row["PRODUCT NAME"]}
             for comp, price in ordered_companies:
-                display_data[comp] = price  # Keep as numeric so formatting works properly.
-            
+                display_data[comp] = price
             display_df = pd.DataFrame([display_data])
+            
             # Determine which columns are company columns for formatting.
             company_cols = [col for col in display_df.columns if col not in ["Brand", "Product"]]
             
