@@ -336,7 +336,7 @@ def get_australia_industrial_group_price(url: str) -> str:
         ) as session:
             response = session.get(url)
     except (httpx.ReadTimeout, Exception) as e:
-        print(f"Error fetching Australia Industrial Group URL {url}: {e}")
+        #print(f"Error fetching Australia Industrial Group URL {url}: {e}")
         return np.nan
         
     sel = Selector(response.text)
@@ -376,9 +376,38 @@ class CompanyScraper:
         print(f"{self.name} stats: {self.stats}")
         return df_company
 
-class EbayScraper(CompanyScraper):
+class ElectroweldEbayScraper(CompanyScraper):
     def __init__(self):
-        super().__init__("EBAY", "EBAY")
+        super().__init__("ELECTROWELD EBAY", "ELECTROWELD EBAY")
+    
+    def get_price(self, url: str) -> str:
+        return get_ebay_price(url)
+
+class HampdonEbayScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("HAMPDON EBAY", "HAMPDON EBAY")
+    
+    def get_price(self, url: str) -> str:
+        return get_ebay_price(url)
+
+class WAIndustrialSuppliesEbayScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("WA INDUSTRIAL SUPPLIES EBAY", "WA INDUSTRIAL SUPPLIES EBAY")
+    
+    def get_price(self, url: str) -> str:
+        return get_ebay_price(url)
+
+class NationalWeldingEbayScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("NATIONAL WELDING EBAY", "NATIONAL WELDING EBAY")
+    
+    def get_price(self, url: str) -> str:
+        return get_ebay_price(url)
+
+class BilbaEbayScraper(CompanyScraper):
+    def __init__(self):
+        super().__init__("BILBA EBAY", "BILBA EBAY")
+    
     def get_price(self, url: str) -> str:
         return get_ebay_price(url)
 
@@ -390,7 +419,7 @@ class ElectroweldScraper(CompanyScraper):
 
 class BilbaScraper(CompanyScraper):
     def __init__(self):
-        super().__init__("BILBA", "Bilba")
+        super().__init__("BILBA WEBSITE", "BILBA WEBSITE")
     def get_price(self, url: str) -> str:
         return get_bilba_website_price(url)
 
@@ -517,7 +546,7 @@ class HampdonScraper(CompanyScraper):
 
 class NationalWeldingScraper(CompanyScraper):
     def __init__(self):
-        super().__init__("NATIONAL WELDING", "national welding")
+        super().__init__("NATIONAL WELDING WEBSITE", "NATIONAL WELDING WEBSITE")
     def get_price(self, url: str) -> str:
         return get_national_welding_price(url)
     
@@ -583,8 +612,27 @@ def read_and_prepare_df(input_file):
     df['Shop Name'] = df['Shop Name'].str.strip().str.upper()
     df.loc[df['Shop Name'] == 'WA INDUSTRIAL SUPPLIES', 'Shop Name'] += ' EBAY'
     df.loc[df['Shop Name'] == 'WElDERS ONLINE', 'Shop Name'] += ' EBAY'
+    df.loc[df['Shop Name'] == 'NATIONAL WELDING', 'Shop Name'] += 'WEBSITE'
+    df.loc[df['Shop Name'] == 'BILBA', 'Shop Name'] += ' WEBSITE'
     df_sub = df[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME', 'Shop Name', 'PRODUCT LINK']].copy()
     df_sub[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME']] = df_sub[['BRAND', 'PRODUCT SKU', 'PRODUCT NAME']].ffill()
+    
+    unique_shops = df_sub["Shop Name"].unique()
+    print("All unique shop names:")
+    for shop in unique_shops:
+        print(shop)
+
+    unique_shops_with_ebay = [
+        shop for shop in unique_shops if isinstance(shop, str) and "ebay" in shop.lower()
+    ]
+    print("\nUnique shop names containing 'ebay':")
+    for shop in unique_shops_with_ebay:
+        print(shop)
+
+
+
+
+
     return df_sub
 
 # A helper function that times the scraping process for each company.
@@ -679,7 +727,11 @@ def main():
     df_sub = read_and_prepare_df(input_file)
     print(df_sub.head())
     scrapers = [
-        EbayScraper(),
+        ElectroweldEbayScraper(),
+        HampdonEbayScraper(),
+        WAIndustrialSuppliesEbayScraper(),
+        NationalWeldingEbayScraper(),
+        BilbaEbayScraper(),
         ElectroweldScraper(),
         BilbaScraper(),
         GentronicsScraper(),
