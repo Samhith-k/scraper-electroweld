@@ -42,6 +42,4 @@ def get_weldquip_price(url: str) -> str:
 if __name__ == "__main__":
     # Test URL provided for Weldquip
     link="https://www.weldquip.com.au/unimig-razortm-cut-80-plasma-cutter"
-
-    
     print(get_weldquip_price(link))

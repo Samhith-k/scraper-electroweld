@@ -4,16 +4,7 @@ import numpy as np
 import pandas as pd
 
 def get_toolswarehouse_price(url: str) -> str:
-    """
-    Fetch the product page from the given URL and return the product price as a string.
-    The price is stored in an element like:
-    <div class="price__current" data-price-container="">
-      <span class="visually-hidden">Current price</span>
-      <span class="money" data-price="">$899.00</span>
-    </div>
     
-    Returns np.nan if any error occurs or the price is not found.
-    """
     # Validate URL
     if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
         return np.nan

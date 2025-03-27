@@ -435,12 +435,9 @@ class SupercheapAutoScraper(CompanyScraper):
 class ToolsWarehouseScraper(CompanyScraper):
     def __init__(self):
         super().__init__("TOOLS WAREHOUSE", "TOOLS WAREHOUSE")
-        self.xpath = "/html/body/main/div[1]/section/article/div[2]/div/div[6]/div[1]/div/div[4]/span[2]"
-        self.driver = init_driver()
     def get_price(self, url: str) -> str:
-        return fetch_value_by_xpath(self.driver, url, self.xpath)
-    def close(self):
-        close_driver(self.driver)
+        return get_toolswarehouse_price(url)
+    
 
 class VekToolsScraper(CompanyScraper):
     def __init__(self):
@@ -545,10 +542,8 @@ class TradeToolsScraper(CompanyScraper):
         options.add_argument("--headless")
         options.add_argument("--disable-gpu")
         self.driver = webdriver.Chrome(options=options)
-
     def get_price(self, url: str) -> str:
         return get_trade_tools_price(url,self.driver)
-    
     def close(self):
         close_driver(self.driver)
     
