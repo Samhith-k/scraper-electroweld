@@ -28,6 +28,7 @@ from scrapers.bilba_website_scraper import get_bilba_website_price
 from scrapers.stafford_welding_scraper import get_stafford_welding_price
 from scrapers.gasweld_scraper import get_gasweld_price
 from scrapers.weldquip_scraper import get_weldquip_price
+from scrapers.trade_tools_scraper import get_trade_tools_price
 
 # Configure logging: the log file will be named with the current timestamp.
 log_filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.log")
@@ -354,66 +355,6 @@ def get_australia_industrial_group_price(url: str) -> str:
     else:
         return np.nan    
     
-def get_trade_tools_price(url: str) -> str:
-    if pd.isna(url) or not isinstance(url, str) or url.strip() == "":
-        return np.nan
-    if not url.startswith("https://www.tradetools.com/"):
-        return np.nan
-        
-    try:
-        with httpx.Client(
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            },
-            follow_redirects=True,
-            timeout=15.0,
-        ) as session:
-            response = session.get(url)
-    except (httpx.ReadTimeout, Exception) as e:
-        print(f"Error fetching Trade Tools URL {url}: {e}")
-        return np.nan
-        
-    sel = Selector(response.text)
-    try:
-        price_container = sel.css("div.price-2To")
-        if not price_container:
-            price_container = sel.css("div.priceContainer-3Tv")
-        
-        if price_container:
-            dollar_sign = price_container.css("span:nth-child(1)::text").get("").strip()
-            dollars = price_container.css("span:nth-child(2)::text").get("").strip()
-            comma = price_container.css("span:nth-child(3)::text").get("").strip()
-            cents_part = price_container.css("span:nth-child(4)::text").get("").strip()
-            decimal_point = price_container.css("span.cents-1T3:nth-child(5)::text").get("").strip()
-            cents = price_container.css("span.cents-1T3:nth-child(6)::text").get("").strip()
-            
-            full_price = f"{dollars}{cents_part}{decimal_point}{cents}".replace("$", "").replace(",", "").strip()
-            if full_price:
-                return full_price
-    except Exception as e:
-        print(f"Error extracting price components: {e}")
-    
-    try:
-        price_text = sel.xpath('/html/body/div[2]/div[1]/main/div/div/div[2]/div/form/div[2]/div/div/div//text()').getall()
-        price_text = [t.strip() for t in price_text if t.strip() and t.strip() != "Inc GST"]
-        combined_price = "".join(price_text).replace("$", "").replace(",", "").replace(".", "")
-        if combined_price and len(combined_price) > 2:
-            dollars = combined_price[:-2]
-            cents = combined_price[-2:]
-            return f"{dollars}.{cents}"
-    except Exception as e:
-        print(f"Error extracting price with XPath: {e}")
-    
-    try:
-        price_element = sel.css("div.priceRangeWrapper-232 span::text").getall()
-        if price_element:
-            price = "".join(price_element).replace("$", "").replace(",", "").replace("Inc GST", "").strip()
-            return price
-    except Exception as e:
-        print(f"Error with fallback price extraction: {e}")
-        
-    return np.nan    
 
 # ------------------------- Scraper Classes -------------------------
 
@@ -600,8 +541,16 @@ class AustraliaIndustrialGroupScraper(CompanyScraper):
 class TradeToolsScraper(CompanyScraper):
     def __init__(self):
         super().__init__("TRADE TOOLS", "TRADE TOOLS")
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--disable-gpu")
+        self.driver = webdriver.Chrome(options=options)
+
     def get_price(self, url: str) -> str:
-        return get_trade_tools_price(url)
+        return get_trade_tools_price(url,self.driver)
+    
+    def close(self):
+        close_driver(self.driver)
     
 class StaffordWeldingScraper(CompanyScraper):
     def __init__(self):
