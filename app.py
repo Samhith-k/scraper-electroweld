@@ -124,6 +124,35 @@ if page == "Welders Comparison":
                 company_cols = [col for col in display_df.columns if col not in ["Brand", "Product"]]
                 styled_row = display_df.style.apply(highlight_min_row, axis=1).format("{:.2f}", subset=company_cols)
                 st.dataframe(styled_row, use_container_width=True)
+        elif view_option == "Basic Table Display":
+            st.subheader("Pivoted Price Comparison Data")
+            
+            # Reorder columns: first "BRAND" and "PRODUCT NAME", then "ELECTROWELD WEBSITE" and "ELECTROWELD EBAY" (if present), then the rest.
+            primary_cols = [col for col in ["BRAND", "PRODUCT NAME"] if col in filtered_df.columns]
+            preferred_cols = [col for col in ["ELECTROWELD WEBSITE", "ELECTROWELD EBAY"] if col in filtered_df.columns]
+            remaining_cols = [col for col in filtered_df.columns if col not in primary_cols + preferred_cols]
+            new_order = primary_cols + preferred_cols + remaining_cols
+            df_reordered = filtered_df[new_order]
+            
+            # Define a function to highlight the cheapest price among competitor columns.
+            # We exclude the non-numeric columns "BRAND" and "PRODUCT NAME".
+            def highlight_min_row_basic(row):
+                competitor_cols = [col for col in row.index if col not in ["BRAND", "PRODUCT NAME"]]
+                if row[competitor_cols].dropna().empty:
+                    return ["" for _ in row.index]
+                min_val = row[competitor_cols].min()
+                return [
+                    'background-color: lightgreen' if col in competitor_cols and row[col] == min_val else ''
+                    for col in row.index
+                ]
+            
+            # Identify competitor columns for numeric formatting.
+            competitor_columns = [col for col in new_order if col not in ["BRAND", "PRODUCT NAME"]]
+            styled_df = df_reordered.style.apply(highlight_min_row_basic, axis=1) \
+                                        .format("{:.2f}", subset=competitor_columns)
+            
+            st.dataframe(styled_df, use_container_width=True)
+
 
     # CSV download option for filtered data
     @st.cache_data
