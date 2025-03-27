@@ -375,6 +375,60 @@ class CompanyScraper:
         self.stats = {"total_rows": total, "valid_product_links": valid, "extracted_prices": extracted}
         print(f"{self.name} stats: {self.stats}")
         return df_company
+    
+class HelmetCompanyScraper(CompanyScraper):
+    def __init__(self, name="", pattern=""):
+        super().__init__(name, pattern)
+        self.name = "HELMET " + name  # Add HELMET prefix to distinguish from welder scrapers
+        
+    def scrape(self, df: pd.DataFrame) -> pd.DataFrame:
+        # Use more robust pattern matching to handle variations in company names
+        pattern = self.pattern.replace("'", "").replace("-", "").replace(".", "")
+        
+        # Match against Shop Name with case-insensitive and more flexible matching
+        match_mask = df['Shop Name'].str.contains(pattern, case=False, na=False, regex=True)
+        print(f"Matching rows for {self.name} (pattern: {pattern}): {match_mask.sum()}")
+        
+        # Show some matching company names for debugging
+        if match_mask.sum() > 0:
+            matching_companies = df.loc[match_mask, 'Shop Name'].unique()
+            print(f"Matching companies: {matching_companies[:5]}")
+        
+        df_company = df[match_mask].copy()
+        
+        # Create a backup of empty DataFrame to handle no matches
+        if df_company.empty:
+            print(f"No matching companies found for {self.name}")
+            empty_df = pd.DataFrame(columns=df.columns)
+            empty_df['Helmet_Price'] = None
+            empty_df['Helmet_Price_Bundle'] = None
+            return empty_df
+        
+        # Apply price extraction to valid URLs only
+        df_company['Helmet_Price'] = None
+        mask = df_company['PRODUCT LINK'].notna() & (df_company['PRODUCT LINK'] != '')
+        if mask.any():
+            df_company.loc[mask, 'Helmet_Price'] = df_company.loc[mask, 'PRODUCT LINK'].apply(self.get_price)
+        
+        # Add bundle price column if needed
+        if 'BUNDLE LINK' in df_company.columns:
+            df_company['Helmet_Price_Bundle'] = None
+            mask = df_company['BUNDLE LINK'].notna() & (df_company['BUNDLE LINK'] != '')
+            if mask.any():
+                df_company.loc[mask, 'Helmet_Price_Bundle'] = df_company.loc[mask, 'BUNDLE LINK'].apply(self.get_price)
+        else:
+            df_company['Helmet_Price_Bundle'] = None
+        
+        # Calculate stats
+        total = len(df_company)
+        valid = df_company['PRODUCT LINK'].notna().sum()
+        extracted = df_company['Helmet_Price'].notna().sum()
+        
+        self.df = df_company
+        self.stats = {"total_rows": total, "valid_product_links": valid, "extracted_prices": extracted}
+        print(f"{self.name} stats: {self.stats}")
+        
+        return df_company
 
 class ElectroweldEbayScraper(CompanyScraper):
     def __init__(self):
@@ -635,6 +689,98 @@ def read_and_prepare_df(input_file):
 
     return df_sub
 
+def read_and_prepare_helmet_df():
+    """
+    Read and transform the helmet pricing Excel file based on the actual structure.
+    """
+    try:
+        # Read the Excel file
+        helmet_df = pd.read_excel('Helmet pricing competition.xlsx', header=0)
+        
+        print("Original helmet data shape:", helmet_df.shape)
+        
+        # Create an empty list to store transformed data
+        transformed_data = []
+        
+        # Define the column groups for different helmet types
+        # Each group is (helmet name column, company name column, URL column)
+        column_groups = [
+            # A, B, C columns
+            (0, 1, 2),  # origin series helmet
+            # D, E, F columns
+            (3, 4, 5),  # ESAB Savage A50 LUX 
+            # G, H, I columns
+            (6, 7, 8),  # Unknown helmet
+            # J, K, L columns
+            (9, 10, 11),  # Weldclass Promax 150
+            # M, N, O columns
+            (12, 13, 14),  # Another helmet type
+            # P, Q, R columns
+            (15, 16, 17),  # G5-01VC
+            # Any other column groups
+        ]
+        
+        # Process each row in the Excel file
+        for index, row in helmet_df.iterrows():
+            # Skip header row if exists
+            if index == 0 and 'origin series helmet' in str(row.iloc[0]).lower():
+                continue
+                
+            # Process each helmet type group
+            for helmet_col, company_col, url_col in column_groups:
+                # Skip if column indices are out of range
+                if helmet_col >= len(row) or company_col >= len(row) or url_col >= len(row):
+                    continue
+                
+                # Get the data
+                helmet_name = str(row.iloc[helmet_col]) if not pd.isna(row.iloc[helmet_col]) else ""
+                company_name = str(row.iloc[company_col]) if not pd.isna(row.iloc[company_col]) else ""
+                url = str(row.iloc[url_col]) if not pd.isna(row.iloc[url_col]) else ""
+                
+                # Skip if no company name or it's a header or empty
+                if not company_name or company_name.lower() in ['company name', 'url', 'n/a', 'nan']:
+                    continue
+                
+                # Skip if URL is explicitly N/A
+                if url.upper() == 'N/A' or url.lower() == 'nan':
+                    url = ''
+                
+                # Add to transformed data
+                transformed_data.append({
+                    'HELMET SKU': '',  # Not available in your data
+                    'HELMET NAME': helmet_name if helmet_name and helmet_name.lower() != 'nan' else 'Unknown',
+                    'Shop Name': company_name,
+                    'PRODUCT LINK': url,
+                    'BRAND': ''  # Not available in your data
+                })
+        
+        # Create a new DataFrame from the transformed data
+        transformed_df = pd.DataFrame(transformed_data)
+        
+        # Drop rows with empty company names
+        transformed_df = transformed_df[transformed_df['Shop Name'].notna() & (transformed_df['Shop Name'] != '')]
+        
+        # Clean up data
+        transformed_df['Shop Name'] = transformed_df['Shop Name'].str.strip().str.upper()
+        transformed_df['HELMET NAME'] = transformed_df['HELMET NAME'].str.strip().str.upper()
+        
+        # Special case handling
+        transformed_df.loc[transformed_df['Shop Name'] == 'WA INDUSTRIAL SUPPLIES', 'Shop Name'] += ' EBAY'
+        transformed_df.loc[transformed_df['Shop Name'] == 'WELDERS ONLINE', 'Shop Name'] += ' EBAY'
+        
+        print("Transformed helmet data shape:", transformed_df.shape)
+        print("Sample of transformed data:")
+        print(transformed_df.head(10))
+        print("Number of companies for AUSTRALIA INDUSTRIAL GROUP:", sum(transformed_df['Shop Name'].str.contains('AUSTRALIA INDUSTRIAL', case=False)))
+        
+        return transformed_df
+        
+    except Exception as e:
+        print(f"Error reading or transforming helmet data: {e}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame()  # Return empty DataFrame on error
+
 # A helper function that times the scraping process for each company.
 def timed_scrape(scraper, df_sub):
     start = time.time()
@@ -698,6 +844,29 @@ def scrape_single(df_sub, scraper, scraper_output_folder):
         scraper.close()
     print(f"{scraper.name} data scraped and saved as {filename}")
 
+def scrape_single_helmet(helmet_df_sub, scraper, scraper_output_folder):
+    """Scrape a single company for helmets"""
+    start = time.time()
+    df_company = scraper.scrape(helmet_df_sub)
+    elapsed = time.time() - start
+    
+    filename = os.path.join(scraper_output_folder, f"HELMET_{scraper.name.replace(' ', '_')}.csv")
+    df_company.to_csv(filename, index=False)
+    
+    # Log URLs missing a price
+    missing_prices = df_company[df_company['Helmet_Price'].isna()]
+    for _, row in missing_prices.iterrows():
+        url = row['PRODUCT LINK']
+        logging.info(f"Missing Helmet Price - {scraper.name},{url}")
+    
+    print(f"{scraper.name} took {elapsed:.2f} seconds.")
+    logging.info(f"{scraper.name} took {elapsed:.2f} seconds.")
+    
+    if hasattr(scraper, 'close'):
+        scraper.close()
+    
+    print(f"{scraper.name} data scraped and saved as {filename}")
+
 def combine_csv(scrapers, scraper_output_folder, combined_csv_folder):
     dfs = []
     for scraper in scrapers:
@@ -716,17 +885,104 @@ def combine_csv(scrapers, scraper_output_folder, combined_csv_folder):
     else:
         print("No CSV files found to combine.")
 
-def main():
-    input_file = 'Pricing.xlsx'
-    scraper_output_folder = "scraper_outputs"
-    combined_csv_folder = "combined_csvs"
+def scrape_helmets(helmet_df_sub, scrapers, scraper_output_folder, combined_csv_folder):
+    """Run helmet scrapers on the helmet dataframe"""
+    helmet_df_list = []
+    scraper_times = {}
     
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_scraper = {executor.submit(timed_scrape, scraper, helmet_df_sub): scraper for scraper in scrapers}
+        
+        for future in concurrent.futures.as_completed(future_to_scraper):
+            scraper = future_to_scraper[future]
+            try:
+                df_company, elapsed = future.result()
+                scraper_times[scraper.name] = elapsed
+            except Exception as e:
+                print(f"HELMET {scraper.name} generated an exception: {e}")
+                logging.error(f"HELMET {scraper.name} generated an exception: {e}")
+            else:
+                helmet_df_list.append(df_company)
+                filename = os.path.join(scraper_output_folder, f"HELMET_{scraper.name.replace(' ', '_')}.csv")
+                df_company.to_csv(filename, index=False)
+                
+                # Log any URLs with missing price
+                missing_prices = df_company[df_company['Helmet_Price'].isna()]
+                for _, row in missing_prices.iterrows():
+                    url = row['PRODUCT LINK']
+                    logging.info(f"Missing Helmet Price - {scraper.name},{url}")
+            
+            if hasattr(scraper, 'close'):
+                scraper.close()
+    
+    # Print and log elapsed time for each company
+    for company, elapsed in scraper_times.items():
+        message = f"HELMET {company} took {elapsed:.2f} seconds."
+        print(message)
+        logging.info(message)
+    
+    if helmet_df_list:
+        helmet_combined_df = pd.concat(helmet_df_list, ignore_index=True)
+        helmet_combined_df.sort_values("HELMET NAME" if "HELMET NAME" in helmet_combined_df.columns else "BRAND", inplace=True)
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        combined_filename = os.path.join(combined_csv_folder, f"helmet_combined_{timestamp}.csv")
+        helmet_combined_df.to_csv(combined_filename, index=False)
+        
+        print(f"Scraped all companies for helmets. Combined CSV saved as {combined_filename}")
+    else:
+        print("No helmet data scraped.")
+
+def combine_helmet_csv(scrapers, scraper_output_folder, combined_csv_folder):
+    """Combine all helmet CSVs into one file"""
+    dfs = []
+    for scraper in scrapers:
+        filename = os.path.join(scraper_output_folder, f"HELMET_{scraper.name.replace(' ', '_')}.csv")
+        if os.path.exists(filename):
+            df_temp = pd.read_csv(filename)
+            dfs.append(df_temp)
+    
+    if dfs:
+        combined_df = pd.concat(dfs, ignore_index=True)
+        combined_df.sort_values("HELMET NAME" if "HELMET NAME" in combined_df.columns else "BRAND", inplace=True)
+        
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        combined_filename = os.path.join(combined_csv_folder, f"helmet_combined_{timestamp}.csv")
+        combined_df.to_csv(combined_filename, index=False)
+        
+        print(f"Helmet CSV files combined into {combined_filename}")
+    else:
+        print("No helmet CSV files found to combine.")
+
+# Update the main function to include helmet scraping options
+def main_with_helmets():
+    # Create output directories if they don't exist
+    scraper_output_folder = "scraper_output"
+    combined_csv_folder = "combined_csv"
     os.makedirs(scraper_output_folder, exist_ok=True)
     os.makedirs(combined_csv_folder, exist_ok=True)
     
+    # Get the input file name from the command line or use default
+    input_file = "Pricing.xlsx"
+    
+    # Load both datasets
     df_sub = read_and_prepare_df(input_file)
+    
+    try:
+        helmet_df_sub = read_and_prepare_helmet_df()
+        helmets_available = True
+        print("\nHelmets data sample:")
+        print(helmet_df_sub.head())
+    except Exception as e:
+        helmets_available = False
+        print(f"Error loading helmet data: {e}")
+        logging.error(f"Error loading helmet data: {e}")
+    
+    print("Welders data sample:")
     print(df_sub.head())
-    scrapers = [
+    
+    # Create scrapers for welders
+    welder_scrapers = [
         ElectroweldEbayScraper(),
         HampdonEbayScraper(),
         WAIndustrialSuppliesEbayScraper(),
@@ -735,59 +991,133 @@ def main():
         ElectroweldScraper(),
         BilbaScraper(),
         GentronicsScraper(),
-        WeldComAuScraper(),
+        WeldComAuScraper(), 
         WeldConnectScraper(),
-        MetweldScraper(),
-        ToolkitDepotScraper(),
+        MetweldScraper(), 
+        ToolkitDepotScraper(), 
         SupercheapAutoScraper(),
-        ToolsWarehouseScraper(),
-        VekToolsScraper(),
+        ToolsWarehouseScraper(), 
+        VekToolsScraper(), 
         KennedysScraper(),
-        TotalToolsScraper(),
-        WAIndustrialScraper(),
+        TotalToolsScraper(), 
+        WAIndustrialScraper(), 
         SydneyToolsScraper(),
-        HareAndForbesScraper(),
-        AlphaweldScraper(),
+        HareAndForbesScraper(), 
+        AlphaweldScraper(), 
         HampdonScraper(),
-        NationalWeldingScraper(),
+        NationalWeldingScraper(), 
         PrimeSuppliesScraper(),
-        AustraliaIndustrialGroupScraper(),
-        TradeToolsScraper(),
-        GasRepScraper(),
         StaffordWeldingScraper(),
         GasweldScraper(),
         WeldquipScraper(),
-        ToolKingScraper()
+        ToolKingScraper(),
+        TradeToolsScraper(),
+        AustraliaIndustrialGroupScraper()
     ]
+    
+    # Create helmet scrapers if helmet data is available
+    helmet_scrapers = []
+    if helmets_available:
+        for scraper_class in [ElectroweldScraper, BilbaScraper, 
+                         GentronicsScraper, WeldComAuScraper, WeldConnectScraper,
+                         MetweldScraper, ToolkitDepotScraper, SupercheapAutoScraper,
+                         ToolsWarehouseScraper, VekToolsScraper, KennedysScraper,
+                         TotalToolsScraper, WAIndustrialScraper, SydneyToolsScraper,
+                         HareAndForbesScraper, AlphaweldScraper, HampdonScraper,
+                         NationalWeldingScraper, PrimeSuppliesScraper, 
+                         StaffordWeldingScraper, GasweldScraper, WeldquipScraper,
+                         ToolKingScraper, TradeToolsScraper, AustraliaIndustrialGroupScraper]:
+        # Create a new instance using the same pattern but with HelmetCompanyScraper as base
+            original = scraper_class()
+        # Create helmet scraper with name and pattern
+            helmet_scraper = HelmetCompanyScraper(name=original.name, pattern=original.pattern)
+        # We don't need to set name and pattern again since we passed them to the constructor
+            helmet_scraper.get_price = original.get_price  # Reuse the same price extractor
+            if hasattr(original, 'driver'):
+                helmet_scraper.driver = original.driver
+            if hasattr(original, 'close'):
+                    helmet_scraper.close = original.close
+        
+            helmet_scrapers.append(helmet_scraper)
+    
     while True:
-        print("\nMENU")
-        print("1. Scrape all")
-        print("2. Choose a company to scrape")
-        print("3. Create new combined CSV")
-        print("4. Exit")
-        choice = input("Enter option: ").strip()
-        if choice == "1":
-            scrape_all(df_sub, scrapers, scraper_output_folder, combined_csv_folder)
-        elif choice == "2":
-            print("\nSelect a company to scrape:")
-            for idx, scraper in enumerate(scrapers, start=1):
-                print(f"{idx}. {scraper.name}")
-            comp_choice = input("Enter company number: ").strip()
-            try:
-                comp_idx = int(comp_choice) - 1
-                if 0 <= comp_idx < len(scrapers):
-                    scrape_single(df_sub, scrapers[comp_idx], scraper_output_folder)
+        print("\nMAIN MENU")
+        print("1. Welder Scraping")
+        if helmets_available:
+            print("2. Helmet Scraping")
+        print("3. Exit")
+        main_choice = input("Enter option: ").strip()
+        
+        if main_choice == "1":
+            # Original welders menu
+            while True:
+                print("\nWELDER SCRAPING MENU")
+                print("1. Scrape all welders")
+                print("2. Choose a company to scrape for welders")
+                print("3. Create new welders combined.csv")
+                print("4. Back to main menu")
+                choice = input("Enter option: ").strip()
+                
+                if choice == "1":
+                    scrape_all(df_sub, welder_scrapers, scraper_output_folder, combined_csv_folder)
+                elif choice == "2":
+                    print("\nSelect a company to scrape for welders:")
+                    for idx, scraper in enumerate(welder_scrapers, start=1):
+                        print(f"{idx}. {scraper.name}")
+                    comp_choice = input("Enter company number: ").strip()
+                    try:
+                        comp_idx = int(comp_choice) - 1
+                        if 0 <= comp_idx < len(welder_scrapers):
+                            scrape_single(df_sub, welder_scrapers[comp_idx], scraper_output_folder)
+                        else:
+                            print("Invalid company number.")
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                elif choice == "3":
+                    combine_csv(welder_scrapers, scraper_output_folder, combined_csv_folder)
+                elif choice == "4":
+                    break
                 else:
-                    print("Invalid company number.")
-            except ValueError:
-                print("Invalid input. Please enter a number.")
-        elif choice == "3":
-            combine_csv(scrapers, scraper_output_folder, combined_csv_folder)
-        elif choice == "4":
+                    print("Invalid option. Try again.")
+        
+        elif main_choice == "2" and helmets_available:
+            # New helmet menu
+            while True:
+                print("\nHELMET SCRAPING MENU")
+                print("1. Scrape all helmets")
+                print("2. Choose a company to scrape for helmets")
+                print("3. Create new helmets combined.csv")
+                print("4. Back to main menu")
+                choice = input("Enter option: ").strip()
+                
+                if choice == "1":
+                    scrape_helmets(helmet_df_sub, helmet_scrapers, scraper_output_folder, combined_csv_folder)
+                elif choice == "2":
+                    print("\nSelect a company to scrape for helmets:")
+                    for idx, scraper in enumerate(helmet_scrapers, start=1):
+                        print(f"{idx}. {scraper.name}")
+                    comp_choice = input("Enter company number: ").strip()
+                    try:
+                        comp_idx = int(comp_choice) - 1
+                        if 0 <= comp_idx < len(helmet_scrapers):
+                            scrape_single_helmet(helmet_df_sub, helmet_scrapers[comp_idx], scraper_output_folder)
+                        else:
+                            print("Invalid company number.")
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                elif choice == "3":
+                    combine_helmet_csv(helmet_scrapers, scraper_output_folder, combined_csv_folder)
+                elif choice == "4":
+                    break
+                else:
+                    print("Invalid option. Try again.")
+        
+        elif main_choice == "3":
             print("Exiting.")
             break
+        
         else:
-            print("Invalid option. Try again.")
+            print("Invalid option. Try again.")       
 
 if __name__ == "__main__":
-    main()
+    main_with_helmets()
