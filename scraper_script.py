@@ -690,9 +690,6 @@ def read_and_prepare_df(input_file):
     return df_sub
 
 def read_and_prepare_helmet_df():
-    """
-    Read and transform the helmet pricing Excel file based on the actual structure.
-    """
     try:
         # Read the Excel file
         helmet_df = pd.read_excel('Helmet pricing competition.xlsx', header=0)
@@ -702,8 +699,7 @@ def read_and_prepare_helmet_df():
         # Create an empty list to store transformed data
         transformed_data = []
         
-        # Define the column groups for different helmet types
-        # Each group is (helmet name column, company name column, URL column)
+        
         column_groups = [
             # A, B, C columns
             (0, 1, 2),  # origin series helmet
@@ -720,32 +716,24 @@ def read_and_prepare_helmet_df():
             # Any other column groups
         ]
         
-        # Process each row in the Excel file
         for index, row in helmet_df.iterrows():
-            # Skip header row if exists
             if index == 0 and 'origin series helmet' in str(row.iloc[0]).lower():
                 continue
                 
-            # Process each helmet type group
             for helmet_col, company_col, url_col in column_groups:
-                # Skip if column indices are out of range
                 if helmet_col >= len(row) or company_col >= len(row) or url_col >= len(row):
                     continue
                 
-                # Get the data
                 helmet_name = str(row.iloc[helmet_col]) if not pd.isna(row.iloc[helmet_col]) else ""
                 company_name = str(row.iloc[company_col]) if not pd.isna(row.iloc[company_col]) else ""
                 url = str(row.iloc[url_col]) if not pd.isna(row.iloc[url_col]) else ""
                 
-                # Skip if no company name or it's a header or empty
                 if not company_name or company_name.lower() in ['company name', 'url', 'n/a', 'nan']:
                     continue
                 
-                # Skip if URL is explicitly N/A
                 if url.upper() == 'N/A' or url.lower() == 'nan':
                     url = ''
                 
-                # Add to transformed data
                 transformed_data.append({
                     'HELMET SKU': '',  # Not available in your data
                     'HELMET NAME': helmet_name if helmet_name and helmet_name.lower() != 'nan' else 'Unknown',
@@ -754,17 +742,13 @@ def read_and_prepare_helmet_df():
                     'BRAND': ''  # Not available in your data
                 })
         
-        # Create a new DataFrame from the transformed data
         transformed_df = pd.DataFrame(transformed_data)
         
-        # Drop rows with empty company names
         transformed_df = transformed_df[transformed_df['Shop Name'].notna() & (transformed_df['Shop Name'] != '')]
         
-        # Clean up data
         transformed_df['Shop Name'] = transformed_df['Shop Name'].str.strip().str.upper()
         transformed_df['HELMET NAME'] = transformed_df['HELMET NAME'].str.strip().str.upper()
         
-        # Special case handling
         transformed_df.loc[transformed_df['Shop Name'] == 'WA INDUSTRIAL SUPPLIES', 'Shop Name'] += ' EBAY'
         transformed_df.loc[transformed_df['Shop Name'] == 'WELDERS ONLINE', 'Shop Name'] += ' EBAY'
         
@@ -845,7 +829,6 @@ def scrape_single(df_sub, scraper, scraper_output_folder):
     print(f"{scraper.name} data scraped and saved as {filename}")
 
 def scrape_single_helmet(helmet_df_sub, scraper, scraper_output_folder):
-    """Scrape a single company for helmets"""
     start = time.time()
     df_company = scraper.scrape(helmet_df_sub)
     elapsed = time.time() - start
@@ -853,7 +836,6 @@ def scrape_single_helmet(helmet_df_sub, scraper, scraper_output_folder):
     filename = os.path.join(scraper_output_folder, f"HELMET_{scraper.name.replace(' ', '_')}.csv")
     df_company.to_csv(filename, index=False)
     
-    # Log URLs missing a price
     missing_prices = df_company[df_company['Helmet_Price'].isna()]
     for _, row in missing_prices.iterrows():
         url = row['PRODUCT LINK']
@@ -886,7 +868,6 @@ def combine_csv(scrapers, scraper_output_folder, combined_csv_folder):
         print("No CSV files found to combine.")
 
 def scrape_helmets(helmet_df_sub, scrapers, scraper_output_folder, combined_csv_folder):
-    """Run helmet scrapers on the helmet dataframe"""
     helmet_df_list = []
     scraper_times = {}
     
@@ -934,7 +915,6 @@ def scrape_helmets(helmet_df_sub, scrapers, scraper_output_folder, combined_csv_
         print("No helmet data scraped.")
 
 def combine_helmet_csv(scrapers, scraper_output_folder, combined_csv_folder):
-    """Combine all helmet CSVs into one file"""
     dfs = []
     for scraper in scrapers:
         filename = os.path.join(scraper_output_folder, f"HELMET_{scraper.name.replace(' ', '_')}.csv")
@@ -954,18 +934,14 @@ def combine_helmet_csv(scrapers, scraper_output_folder, combined_csv_folder):
     else:
         print("No helmet CSV files found to combine.")
 
-# Update the main function to include helmet scraping options
 def main_with_helmets():
-    # Create output directories if they don't exist
     scraper_output_folder = "scraper_output"
     combined_csv_folder = "combined_csv"
     os.makedirs(scraper_output_folder, exist_ok=True)
     os.makedirs(combined_csv_folder, exist_ok=True)
     
-    # Get the input file name from the command line or use default
     input_file = "Pricing.xlsx"
     
-    # Load both datasets
     df_sub = read_and_prepare_df(input_file)
     
     try:
@@ -1015,7 +991,6 @@ def main_with_helmets():
         AustraliaIndustrialGroupScraper()
     ]
     
-    # Create helmet scrapers if helmet data is available
     helmet_scrapers = []
     if helmets_available:
         for scraper_class in [ElectroweldScraper, BilbaScraper, 
