@@ -96,23 +96,21 @@ def pivot_data(df):
         return None
 
 def highlight_min(row):
-    """
-    Highlight the minimum (cheapest) price in a row.
-    If a cell has multiple prices (comma-separated), only the first is used for numeric comparison.
-    """
     numeric_values = []
     for cell in row:
         try:
-            # Attempt to convert cell to float (grab the first chunk if multiple comma-separated).
-            value_str = str(cell).split(",")[0].strip()
+            # Convert cell to string, remove commas (thousands separators), strip whitespace
+            value_str = str(cell).replace(",", "").strip()
+            # Now parse the entire string as a float
             numeric_values.append(float(value_str))
         except:
             numeric_values.append(float('inf'))
             
+    # Find the minimum and highlight all columns that match it
     min_value = min(numeric_values)
     is_min = [val == min_value for val in numeric_values]
-    # Make sure we return exactly the same number of styles as columns in row
     return ['background-color: yellow' if flag else '' for flag in is_min]
+
 
 def display_comparison_page(df, page_title):
     """
