@@ -1,168 +1,173 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from PIL import Image
-import glob
-import os
+import re
 
-# Set page configuration at the very top
-logo_image = Image.open("./logo-electroweld.jpg")
-st.set_page_config(
-    page_title="Hardware Parts Price Comparison",
-    page_icon=logo_image,
-    layout="wide"
-)
+def clean_prices(prices):
+    cleaned = []
+    for price in prices:
+        if pd.notna(price):
+            s = str(price)
+            # Remove letters (a-z, A-Z), commas, and $ symbols.
+            cleaned_price = re.sub(r'[a-zA-Z,$]', '', s).strip()
+            if cleaned_price and cleaned_price not in cleaned:
+                cleaned.append(cleaned_price)
+    return ', '.join(cleaned)
 
-# Sidebar navigation
-page = st.sidebar.radio("Navigation", ["Welders Comparison", "Helmet Comparison"])
+def load_welding_data():
+    try:
+        data = pd.read_csv("combined_csvs/combined_20250327_121553.csv")
+        return data
+    except Exception as e:
+        st.error(f"Error loading CSV file: {e}")
+        return None
 
-if page == "Welders Comparison":
-    st.image(logo_image, width=150)
-    st.title("Hardware Parts Price Comparison")
-    
-    @st.cache_data
-    def load_data():
-        # Find all CSV files matching the pattern in the combined_csvs directory
-        csv_files = glob.glob("combined_csvs/combined_*.csv")
-        if not csv_files:
-            st.error("No CSV files found in the combined_csvs directory!")
-            return pd.DataFrame()
-        # Sort files by modification time (oldest first)
-        csv_files.sort(key=lambda x: os.path.getmtime(x))
-        # Select the most recently modified file
-        latest_csv = csv_files[-1]
-        df = pd.read_csv(latest_csv)
-        df.columns = df.columns.str.strip()
+def pivot_data(df):
+    try:
+        # Pivot the DataFrame so that each unique shop becomes a column.
+        pivot_df = df.pivot_table(
+            index=["BRAND", "PRODUCT NAME"],
+            columns="Shop Name",
+            values="Price",
+            aggfunc=clean_prices  # Clean up the price values during aggregation.
+        ).reset_index()
         
-        def parse_price(price):
-            if pd.isna(price):
-                return np.nan
-            price_str = str(price)
-            for char in ["AU", "$", ",", "each"]:
-                price_str = price_str.replace(char, "")
-            price_str = price_str.strip()
-            try:
-                return float(price_str)
-            except Exception:
-                return np.nan
+        # Reorder columns so that electroweld website and electroweld ebay come immediately
+        # after BRAND and PRODUCT NAME (if they exist in the columns).
+        all_columns = list(pivot_df.columns)
         
-        df["Price_Numeric"] = df["Price"].apply(parse_price)
-        return df
-    
-    df = load_data()
-    df_pivot = df.pivot_table(
-        index=["BRAND", "PRODUCT NAME"],
-        columns="Shop Name",
-        values="Price_Numeric",
-        aggfunc='first'
-    ).reset_index()
-    
-    # Sidebar filters for brand and product (default empty = show everything)
-    st.sidebar.header("Filters")
-    brand_options = df_pivot["BRAND"].dropna().unique().tolist()
-    selected_brand = st.sidebar.multiselect("Select Brand(s):", options=brand_options, default=[])
-    product_options = df_pivot["PRODUCT NAME"].dropna().unique().tolist()
-    selected_product = st.sidebar.multiselect("Select Product(s):", options=product_options, default=[])
-    
-    # For companies, default is empty and empty selection means "everything"
-    competitor_columns = [col for col in df_pivot.columns if col not in ["BRAND", "PRODUCT NAME"]]
-    selected_companies = st.sidebar.multiselect("Select Companies:", options=competitor_columns, default=[])
-    if not selected_companies:
-        selected_companies = competitor_columns
-    
-    # Additional view option
-    view_option = st.sidebar.radio("Display Format", ["Styled Display", "Basic Table Display"])
-    
-    # Apply brand and product filters
-    filtered_df = df_pivot.copy()
-    if selected_brand:
-        filtered_df = filtered_df[filtered_df["BRAND"].isin(selected_brand)]
-    if selected_product:
-        filtered_df = filtered_df[filtered_df["PRODUCT NAME"].isin(selected_product)]
-    
-    st.subheader("Individual Price Comparison Tables")
-    
-    # Function to highlight the minimum value among competitor columns
-    def highlight_min_row(row):
-        company_cols = [col for col in row.index if col not in ["Brand", "Product"]]
-        if row[company_cols].dropna().empty:
-            return ["" for _ in row.index]
-        min_val = row[company_cols].min()
-        return [
-            'background-color: lightgreen' if col in company_cols and row[col] == min_val else ''
-            for col in row.index
-        ]
-    
-    if filtered_df.empty:
-        st.write("No data available for the selected filters.")
-    else:
-        if view_option == "Styled Display":
-            # For the styled display, process each row separately using sorted competitor data.
-            counter = 1
-            for idx, row in filtered_df.iterrows():
-                companies_dict = {}
-                # Add ELECTROWELD WEBSITE if available.
-                if "ELECTROWELD WEBSITE" in df_pivot.columns:
-                    companies_dict["ELECTROWELD WEBSITE"] = row.get("ELECTROWELD WEBSITE", np.nan)
-                # Add other selected companies (if they have nonzero and non-NaN values)
-                for comp in selected_companies:
-                    if comp == "ELECTROWELD WEBSITE":
-                        continue
-                    value = row.get(comp)
-                    if pd.notna(value) and value != 0:
-                        companies_dict[comp] = value
-                # Order companies: sort the competitors (excluding ELECTROWELD WEBSITE) by price, then put ELECTROWELD WEBSITE first.
-                electroweld_value = companies_dict.pop("ELECTROWELD WEBSITE", np.nan)
-                sorted_companies = sorted(companies_dict.items(), key=lambda x: x[1] if pd.notna(x[1]) else float('inf'))
-                ordered_companies = [("ELECTROWELD WEBSITE", electroweld_value)] + sorted_companies
-                # Build display data with Brand, Product, and the competitor data.
-                display_data = {"Brand": row["BRAND"], "Product": row["PRODUCT NAME"]}
-                for comp, price in ordered_companies:
-                    display_data[comp] = price
-                display_df = pd.DataFrame([display_data], index=[counter])
-                counter += 1
-                company_cols = [col for col in display_df.columns if col not in ["Brand", "Product"]]
-                styled_row = display_df.style.apply(highlight_min_row, axis=1).format("{:.2f}", subset=company_cols)
-                st.dataframe(styled_row, use_container_width=True)
-        elif view_option == "Basic Table Display":
-            st.subheader("Pivoted Price Comparison Data")
-            
-            # Reorder columns: first "BRAND" and "PRODUCT NAME", then "ELECTROWELD WEBSITE" and "ELECTROWELD EBAY" (if present), then the rest.
-            primary_cols = [col for col in ["BRAND", "PRODUCT NAME"] if col in filtered_df.columns]
-            preferred_cols = [col for col in ["ELECTROWELD WEBSITE", "ELECTROWELD EBAY"] if col in filtered_df.columns]
-            remaining_cols = [col for col in filtered_df.columns if col not in primary_cols + preferred_cols]
-            new_order = primary_cols + preferred_cols + remaining_cols
-            df_reordered = filtered_df[new_order]
-            
-            # Define a function to highlight the cheapest price among competitor columns.
-            # We exclude the non-numeric columns "BRAND" and "PRODUCT NAME".
-            def highlight_min_row_basic(row):
-                competitor_cols = [col for col in row.index if col not in ["BRAND", "PRODUCT NAME"]]
-                if row[competitor_cols].dropna().empty:
-                    return ["" for _ in row.index]
-                min_val = row[competitor_cols].min()
-                return [
-                    'background-color: lightgreen' if col in competitor_cols and row[col] == min_val else ''
-                    for col in row.index
-                ]
-            
-            # Identify competitor columns for numeric formatting.
-            competitor_columns = [col for col in new_order if col not in ["BRAND", "PRODUCT NAME"]]
-            styled_df = df_reordered.style.apply(highlight_min_row_basic, axis=1) \
-                                        .format("{:.2f}", subset=competitor_columns)
-            
-            st.dataframe(styled_df, use_container_width=True)
+        # Start with the mandatory columns
+        new_order = ["BRAND", "PRODUCT NAME"]
+        
+        # Append the two Electroweld columns if they exist
+        electroweld_columns = ["electroweld website", "electroweld ebay"]
+        for col in electroweld_columns:
+            if col in all_columns:
+                new_order.append(col)
+        
+        # Append the rest of the columns that are not already in new_order
+        for col in all_columns:
+            if col not in new_order:
+                new_order.append(col)
+        
+        # Reindex pivot_df with the new column order
+        pivot_df = pivot_df[new_order]
+        return pivot_df
+    except Exception as e:
+        st.error(f"Error pivoting data: {e}")
+        return None
 
+def highlight_min(row):
+    """Highlight the minimum (cheapest) price in a row."""
+    numeric_values = []
+    for cell in row:
+        try:
+            # Attempt to convert cell (which can be comma-separated) to float.
+            value_str = str(cell).split(",")[0].strip()
+            numeric_values.append(float(value_str))
+        except:
+            numeric_values.append(float('inf'))
+            
+    min_value = min(numeric_values)
+    is_min = [val == min_value for val in numeric_values]
+    return ['background-color: yellow' if cell else '' for cell in is_min]
 
-    # CSV download option for filtered data
-    @st.cache_data
-    def convert_df_to_csv(dataframe):
-        return dataframe.to_csv(index=False).encode('utf-8')
-    
-    csv_data = convert_df_to_csv(filtered_df)
-    st.download_button(
-        label="Download Filtered Data as CSV",
-        data=csv_data,
-        file_name='filtered_data.csv',
-        mime='text/csv'
+def main():
+    # Set up the page with a logo and configuration.
+    logo_image = Image.open("./app_data/logo-electroweld.jpg")
+    st.set_page_config(
+        page_title="Hardware Parts Price Comparison",
+        page_icon=logo_image,
+        layout="wide"
     )
+    st.title("Product Price Comparison")
+    
+    # Navigation and style selectors.
+    page = st.sidebar.radio("Navigation", ["Welders Comparison", "Helmet Comparison"])
+    style = st.sidebar.radio("Style", ["Basic", "Styled"])
+
+    if page == "Welders Comparison":
+        df = load_welding_data()
+        if df is None:
+            return
+        
+        pivot_df = pivot_data(df)
+        if pivot_df is None or pivot_df.empty:
+            st.error("Pivot table is empty or could not be created.")
+            return
+
+        # -------------------
+        # Add Filters (defaults are empty)
+        # -------------------
+        
+        # All possible brands
+        all_brands = sorted(pivot_df["BRAND"].unique())
+        # Brand multiselect filter
+        selected_brands = st.sidebar.multiselect("Filter by Brand", all_brands, default=[])
+        # If no brands are selected, we use all brands
+        if not selected_brands:
+            selected_brands = all_brands
+        
+        # Filtered pivot_df to retrieve only product names relevant to selected brands
+        filtered_by_brand = pivot_df[pivot_df["BRAND"].isin(selected_brands)]
+        all_products = sorted(filtered_by_brand["PRODUCT NAME"].unique())
+        
+        # Product Name multiselect filter
+        selected_products = st.sidebar.multiselect("Filter by Product Name", all_products, default=[])
+        # If no product names are selected, we use all product names
+        if not selected_products:
+            selected_products = all_products
+        
+        # Company (Shop) columns (everything after BRAND and PRODUCT NAME)
+        company_columns = list(pivot_df.columns[2:])
+        # Company multiselect filter
+        selected_companies = st.sidebar.multiselect("Filter by Companies", company_columns, default=[])
+        # If no companies are selected, we use all company columns
+        if not selected_companies:
+            selected_companies = company_columns
+        
+        # -------------------
+        # Apply filters
+        # -------------------
+        # Filter by selected brands and products
+        pivot_df = pivot_df[
+            (pivot_df["BRAND"].isin(selected_brands)) &
+            (pivot_df["PRODUCT NAME"].isin(selected_products))
+        ]
+        
+        # Now select only the columns for companies that were chosen, plus the mandatory first two.
+        columns_to_show = ["BRAND", "PRODUCT NAME"] + selected_companies
+        # Make sure we only select columns that exist in pivot_df
+        columns_to_show = [col for col in columns_to_show if col in pivot_df.columns]
+        pivot_df = pivot_df[columns_to_show]
+        
+        st.write("### Price Comparison by Shop")
+        
+        # -------------------
+        # Display the table
+        # -------------------
+        if style == "Basic":
+            # Show the full pivot table with selected columns, highlighting cheapest price.
+            styled_df = pivot_df.style.apply(highlight_min, axis=1)
+            st.dataframe(styled_df, use_container_width=True)
+        
+        elif style == "Styled":
+            # For each product row, create and display a one-row table with only the
+            # selected columns that have non-missing values.
+            for _, row in pivot_df.iterrows():
+                product_data = row.to_dict()
+                filtered_data = {
+                    "BRAND": product_data.get("BRAND"),
+                    "PRODUCT NAME": product_data.get("PRODUCT NAME")
+                }
+                for col in selected_companies:
+                    val = product_data.get(col)
+                    # Only show the column if there's a non-missing value
+                    if pd.notna(val) and val != "nan" and val != "":
+                        filtered_data[col] = val
+                product_df = pd.DataFrame([filtered_data])
+                styled_df = product_df.style.apply(highlight_min, axis=1)
+                st.dataframe(styled_df, use_container_width=True)
+
+if __name__ == '__main__':
+    main()
