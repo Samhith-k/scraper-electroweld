@@ -125,12 +125,12 @@ def display_comparison_page(df, page_title):
     
     pivot_df = pivot_data(df)
     if pivot_df is None or pivot_df.empty:
-        #st.warning(f"{page_title} pivot table is empty or could not be created. Check your CSV data.")
+        st.warning(f"{page_title} pivot table is empty or could not be created. Check your CSV data.")
         return
 
     # Debug info about pivot_df
-    #st.write(f"DEBUG: {page_title} pivot_df shape:", pivot_df.shape)
-    #st.write(f"DEBUG: {page_title} pivot_df columns:", pivot_df.columns.tolist())
+    st.write(f"DEBUG: {page_title} pivot_df shape:", pivot_df.shape)
+    st.write(f"DEBUG: {page_title} pivot_df columns:", pivot_df.columns.tolist())
 
     # Attempt a plain display first (comment this out if not needed)
     try:
@@ -185,7 +185,7 @@ def display_comparison_page(df, page_title):
     style_choice = st.sidebar.radio(f"{page_title} Table Style", ["Basic", "Styled"])
     
     # If it's not empty, let's show a quick shape:
-    #st.write(f"DEBUG: Final {page_title} pivot_df shape (post-filter):", pivot_df.shape)
+    st.write(f"DEBUG: Final {page_title} pivot_df shape (post-filter):", pivot_df.shape)
 
     if style_choice == "Basic":
         # Show the full pivot table with highlighting
