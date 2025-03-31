@@ -40,7 +40,7 @@ def pivot_data(df):
         new_order = ["BRAND", "PRODUCT NAME"]
         
         # Append the two Electroweld columns if they exist
-        electroweld_columns = ["electroweld website", "electroweld ebay"]
+        electroweld_columns = ["ELECTROWELD WEBSITE", "ELECTROWELD EBAY"]
         for col in electroweld_columns:
             if col in all_columns:
                 new_order.append(col)
