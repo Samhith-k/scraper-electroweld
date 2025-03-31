@@ -129,16 +129,16 @@ def display_comparison_page(df, page_title):
         return
 
     # Debug info about pivot_df
-    st.write(f"DEBUG: {page_title} pivot_df shape:", pivot_df.shape)
-    st.write(f"DEBUG: {page_title} pivot_df columns:", pivot_df.columns.tolist())
+    #st.write(f"DEBUG: {page_title} pivot_df shape:", pivot_df.shape)
+    #st.write(f"DEBUG: {page_title} pivot_df columns:", pivot_df.columns.tolist())
 
     # Attempt a plain display first (comment this out if not needed)
-    try:
-        st.write(f"DEBUG: Preview of unstyled {page_title} pivot_df:")
-        st.dataframe(pivot_df, use_container_width=True)
-    except:
-        st.error("Plain pivot_df display crashed. Likely due to structure issues.")
-        return
+    # try:
+    #     #st.write(f"DEBUG: Preview of unstyled {page_title} pivot_df:")
+    #     #st.dataframe(pivot_df, use_container_width=True)
+    # except:
+    #     st.error("Plain pivot_df display crashed. Likely due to structure issues.")
+    #     return
 
     # -------------------
     # Build filters
@@ -215,8 +215,8 @@ def display_comparison_page(df, page_title):
             product_df = pd.DataFrame([filtered_data])
 
             # Debug: show the mini DataFrame before styling
-            st.write(f"DEBUG: Mini DataFrame for {page_title} row {i}: shape={product_df.shape}")
-            st.dataframe(product_df)  # unstyled, to ensure it renders
+            #st.write(f"DEBUG: Mini DataFrame for {page_title} row {i}: shape={product_df.shape}")
+            #st.dataframe(product_df)  # unstyled, to ensure it renders
 
             try:
                 styled_df = product_df.style.apply(highlight_min, axis=1)
