@@ -17,7 +17,7 @@ def clean_prices(prices):
             # 1) Remove any HTML tags entirely
             s = re.sub(r"<[^>]*>", "", s)
 
-            # 2) Keep only digits, ., ,, -, and optionally spaces
+            # 2) Keep only digits, ., ,, -, (and strip leftover spaces)
             s = re.sub(r"[^0-9.,\-]+", "", s).strip()
             
             # Now s should be mostly numeric with . or , or - 
@@ -67,9 +67,17 @@ def pivot_data(df):
             aggfunc=clean_prices  # Clean up price values during aggregation.
         ).reset_index()
         
+        # Convert all column labels to string (avoid multi-index or unexpected dtypes).
+        pivot_df.columns = [str(c) for c in pivot_df.columns]
+
+        # Check for duplicate columns
+        cols = pivot_df.columns.tolist()
+        if len(cols) != len(set(cols)):
+            st.warning("Duplicate columns found in pivot DataFrame!")
+            st.write("Columns:", cols)
+
         # Reorder columns so that ELECTROWELD WEBSITE and ELECTROWELD EBAY appear after BRAND, PRODUCT NAME
         all_columns = list(pivot_df.columns)
-        
         new_order = ["BRAND", "PRODUCT NAME"]
         electroweld_columns = ["ELECTROWELD WEBSITE", "ELECTROWELD EBAY"]
         for col in electroweld_columns:
@@ -103,6 +111,7 @@ def highlight_min(row):
             
     min_value = min(numeric_values)
     is_min = [val == min_value for val in numeric_values]
+    # Make sure we return exactly the same number of styles as columns in row
     return ['background-color: yellow' if flag else '' for flag in is_min]
 
 def display_comparison_page(df, page_title):
@@ -117,6 +126,18 @@ def display_comparison_page(df, page_title):
     pivot_df = pivot_data(df)
     if pivot_df is None or pivot_df.empty:
         st.warning(f"{page_title} pivot table is empty or could not be created. Check your CSV data.")
+        return
+
+    # Debug info about pivot_df
+    st.write(f"DEBUG: {page_title} pivot_df shape:", pivot_df.shape)
+    st.write(f"DEBUG: {page_title} pivot_df columns:", pivot_df.columns.tolist())
+
+    # Attempt a plain display first (comment this out if not needed)
+    try:
+        st.write(f"DEBUG: Preview of unstyled {page_title} pivot_df:")
+        st.dataframe(pivot_df, use_container_width=True)
+    except:
+        st.error("Plain pivot_df display crashed. Likely due to structure issues.")
         return
 
     # -------------------
@@ -163,18 +184,19 @@ def display_comparison_page(df, page_title):
     # Style Choice
     style_choice = st.sidebar.radio(f"{page_title} Table Style", ["Basic", "Styled"])
     
-    # Quick check to ensure there's still data
-    if pivot_df.empty:
-        st.warning("No data left to display.")
-        return
+    # If it's not empty, let's show a quick shape:
+    st.write(f"DEBUG: Final {page_title} pivot_df shape (post-filter):", pivot_df.shape)
 
     if style_choice == "Basic":
         # Show the full pivot table with highlighting
-        styled_df = pivot_df.style.apply(highlight_min, axis=1)
-        st.dataframe(styled_df, use_container_width=True)
+        try:
+            styled_df = pivot_df.style.apply(highlight_min, axis=1)
+            st.dataframe(styled_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error during styling the {page_title} DataFrame in Basic mode: {e}")
     else:  # "Styled"
         # Display each product row individually
-        for _, row in pivot_df.iterrows():
+        for i, (_, row) in enumerate(pivot_df.iterrows()):
             product_data = row.to_dict()
             filtered_data = {
                 "BRAND": product_data.get("BRAND"),
@@ -191,8 +213,16 @@ def display_comparison_page(df, page_title):
                 continue
 
             product_df = pd.DataFrame([filtered_data])
-            styled_df = product_df.style.apply(highlight_min, axis=1)
-            st.dataframe(styled_df, use_container_width=True)
+
+            # Debug: show the mini DataFrame before styling
+            st.write(f"DEBUG: Mini DataFrame for {page_title} row {i}: shape={product_df.shape}")
+            st.dataframe(product_df)  # unstyled, to ensure it renders
+
+            try:
+                styled_df = product_df.style.apply(highlight_min, axis=1)
+                st.dataframe(styled_df, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error styling mini DataFrame for row {i} ({page_title}): {e}")
 
 def main():
     # Set up the page with a logo and config.
